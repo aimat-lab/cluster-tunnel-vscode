@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ClusterData } from "./clusterData";
-import { ClusterNode, ClustersView } from "./clustersView";
+import { CLUSTERS_VIEW_ID, ClusterNode, ClustersView } from "./clustersView";
 import { loadChanges } from "./codeChanges";
 import { Ctun } from "./ctun";
 import { JobsPanel, JobsPanelServices } from "./jobsPanel";
@@ -19,7 +19,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const reviewsChanged = new vscode.EventEmitter<void>();
   const pendingCount = () => pendingReviews(data.jobs, reviews.all()).length;
 
-  const clustersView = vscode.window.createTreeView("ctun.clusters", { treeDataProvider: new ClustersView(data) });
+  const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
   const projectsView = vscode.window.createTreeView("ctun.projects", { treeDataProvider: new ProjectsView(data) });
   const updateBadge = () => {
     const pending = pendingCount();

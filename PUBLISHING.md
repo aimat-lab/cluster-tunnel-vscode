@@ -1,6 +1,6 @@
 # Publishing the ctun extension
 
-How to publish `ctun-vscode` to the VS Code Marketplace (and, optionally, Open
+How to publish `cluster-tunnel-vscode` to the VS Code Marketplace (and, optionally, Open
 VSX). Checked against the official docs on 2026-10-12; the sources are listed
 at the end. Publishing is public and hard to undo: a removed extension name stays
 reserved forever, and a version number can never be reused.
@@ -12,14 +12,15 @@ reserved forever, and a version number can never be reused.
 
 ## 1. Fix what blocks a public release
 
-The license (MIT, `LICENSE`) and the icon (`media/icon.png`, redrawn from
-cluster-tunnel's banner) are in place. Check the rest before a publish:
+The icon (`media/icon.png`, redrawn from
+cluster-tunnel's banner) is in place. Check the rest before a publish:
 
 | Item | Now | To do |
 |---|---|---|
-| Publisher | `"publisher": "luguza"` | Must equal the publisher ID you create in step 3. The ID can never change. |
-| Repository | `Luguza/ctun-vscode` (public) | vsce turns README links into absolute URLs from it. If the repo moves, change the URL. |
-| Name | `ctun-vscode` / "ctun — Cluster Tunnel" | The name and display name must be unique on the Marketplace. Search for them first. |
+| License | None yet | Pick one, add `LICENSE` and set `"license"` in `package.json`. Without a file, vsce asks before it packages, and without a license nobody may reuse the code. |
+| Publisher | `"publisher": "aimat-lab"` | Must equal the publisher ID you create in step 3. The ID can never change. |
+| Repository | `aimat-lab/cluster-tunnel-vscode` | vsce turns README links into absolute URLs from it. If the repo moves, change the URL. |
+| Name | `cluster-tunnel-vscode` / "Cluster Tunnel" | The name and display name must be unique on the Marketplace. Search for them first. |
 | README | Links only to files in the repo | Images must be `https` URLs and not SVG (except badges from trusted providers). |
 | Version | `0.0.1` | Use plain `major.minor.patch`. Suffixes like `-beta` are not allowed. |
 | Metadata | `categories: ["Other"]` | Optional: add `keywords` (at most 30) and a `galleryBanner`. |
@@ -35,7 +36,7 @@ The Marketplace shows that file as the "Changelog" tab.
 
 1. Go to <https://marketplace.visualstudio.com/manage> and sign in with your
    Microsoft account.
-2. Click **Create publisher**. Enter the **ID** (`luguza`, or what
+2. Click **Create publisher**. Enter the **ID** (`aimat-lab`, or what
    `package.json` says) and a display **Name**.
 
 The **Verified publisher** badge comes later: it needs 6 months on the
@@ -46,10 +47,10 @@ Marketplace and a domain of your own. You don't need it to publish.
 ```bash
 npm ci
 npm test
-npm run package          # → ctun-vscode-<version>.vsix
+npm run package          # → cluster-tunnel-vscode-<version>.vsix
 ```
 
-Install the `.vsix` once (`code --install-extension ctun-vscode-<version>.vsix`)
+Install the `.vsix` once (`code --install-extension cluster-tunnel-vscode-<version>.vsix`)
 and try it before the upload. The package holds only `out/`, `media/`, the README,
 the changelog and `package.json` (see `.vscodeignore`). It has no runtime
 dependencies, so it does not matter that you package on Windows. (vsce warns
@@ -68,7 +69,7 @@ Pick one way.
 2. Log in and publish:
 
    ```bash
-   npx vsce login luguza        # paste the PAT
+   npx vsce login aimat-lab     # paste the PAT
    npx vsce publish             # publishes the version in package.json
    ```
 
@@ -141,27 +142,27 @@ is odd minor numbers for pre-releases (`0.1.x`) and even ones for releases
 3. Once:
 
    ```bash
-   npx ovsx create-namespace luguza -p <token>
+   npx ovsx create-namespace aimat-lab -p <token>
    ```
 
 4. For each release, upload the same `.vsix`:
 
    ```bash
-   npx ovsx publish ctun-vscode-<version>.vsix -p <token>
+   npx ovsx publish cluster-tunnel-vscode-<version>.vsix -p <token>
    ```
 
 ## 9. After publishing
 
 - Within a few minutes, the extension shows at
-  `https://marketplace.visualstudio.com/items?itemName=luguza.ctun-vscode`.
+  `https://marketplace.visualstudio.com/items?itemName=aimat-lab.cluster-tunnel-vscode`.
 - In the README, replace the "Install from VSIX" steps with the Marketplace
-  link, and with `code --install-extension luguza.ctun-vscode`.
+  link, and with `code --install-extension aimat-lab.cluster-tunnel-vscode`.
 - Undo options, from mild to final:
   - **Unpublish** (manage page → More Actions): nobody can download it, and the
     statistics are kept.
   - **Delete this version** (Reports): that version number can never be used
     again. You cannot delete the latest version.
-  - **Remove**: `npx vsce unpublish luguza.ctun-vscode`, or manage page →
+  - **Remove**: `npx vsce unpublish aimat-lab.cluster-tunnel-vscode`, or manage page →
     Remove. This deletes the statistics and reserves the name forever.
 
 ## Release checklist

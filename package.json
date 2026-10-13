@@ -20,7 +20,9 @@
     "ui"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -167,12 +169,12 @@
             "window",
             "vscode"
           ],
-          "default": "window",
+          "default": "vscode",
           "enumDescriptions": [
             "ctun's own login window (tkinter).",
             "VS Code input boxes; the secrets reach ctun on stdin only."
           ],
-          "markdownDescription": "How **Log in** asks for the session budget, password and OTP."
+          "markdownDescription": "How **Log in** asks for the session budget, password and OTP. Also applies to `ctun login -i` run by agents and terminals of this window."
         },
         "ctun.wandb.project": {
           "type": "string",

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { ClusterData } from "./clusterData";
 import { ClusterInfo, Ctun, CtunError } from "./ctun";
+import type { LoginOutcome } from "./loginBridge";
 
 /** The login waits for a human, so allow far more than a normal call. */
 const LOGIN_TIMEOUT_MS = 10 * 60_000;
@@ -16,18 +17,29 @@ interface Credentials {
   limit: number | null;
 }
 
-/** Logs in to `cluster` and waits until its tunnel is live. */
-export async function logIn(ctun: Ctun, data: ClusterData, cluster: string, method: LoginMethod): Promise<void> {
+/**
+ * Logs in to `cluster` and waits until its tunnel is live.
+ *
+ * `sessionLimit` replaces the configured limit as the budget box's default.
+ */
+export async function logIn(
+  ctun: Ctun,
+  data: ClusterData,
+  cluster: string,
+  method: LoginMethod,
+  sessionLimit?: number | null,
+): Promise<LoginOutcome> {
   let credentials: Credentials | undefined;
   if (method === "vscode") {
     try {
-      credentials = await askCredentials(cluster, await ctun.info(cluster));
+      const info = await ctun.info(cluster);
+      const budget = sessionLimit === undefined ? info.budget : { ...info.budget, session_limit: sessionLimit };
+      credentials = await askCredentials(cluster, { ...info, budget });
     } catch (error) {
-      showCtunError(`Login to ${cluster} failed`, error);
-      return;
+      return loginFailed(cluster, error);
     }
     if (credentials === undefined) {
-      return;
+      return { status: "cancelled" };
     }
   }
   data.loggingIn.add(cluster);
@@ -45,11 +57,13 @@ export async function logIn(ctun: Ctun, data: ClusterData, cluster: string, meth
     const live = await waitUntilLive(ctun, cluster);
     if (live) {
       void vscode.window.showInformationMessage(`ctun: ${cluster} connected.`);
-    } else {
-      void vscode.window.showWarningMessage(`ctun: the login finished, but ${cluster} is not live.`);
+      return { status: "live" };
     }
+    const message = `the login finished, but ${cluster} is not live.`;
+    void vscode.window.showWarningMessage(`ctun: ${message}`);
+    return { status: "failed", message };
   } catch (error) {
-    showCtunError(`Login to ${cluster} failed`, error);
+    return loginFailed(cluster, error);
   } finally {
     data.loggingIn.delete(cluster);
     await data.refresh();
@@ -111,7 +125,13 @@ async function waitUntilLive(ctun: Ctun, cluster: string): Promise<boolean> {
   return false;
 }
 
-function showCtunError(headline: string, error: unknown): void {
+function loginFailed(cluster: string, error: unknown): LoginOutcome {
+  showCtunError(`Login to ${cluster} failed`, error);
+  return { status: "failed", message: error.message };
+}
+
+/** Shows a `CtunError`; rethrows anything else, as that is a bug. */
+function showCtunError(headline: string, error: unknown): asserts error is CtunError {
   if (!(error instanceof CtunError)) {
     throw error;
   }

@@ -7,6 +7,7 @@ import { Ctun } from "./ctun";
 import { JobsPanel, JobsPanelServices } from "./jobsPanel";
 import { pendingReviews } from "./jobsTable";
 import { LoginMethod, logIn, logOut } from "./login";
+import { BRIDGE_VARIABLE, LoginAnswer, startLoginBridge } from "./loginBridge";
 import { ProjectsView } from "./projectsView";
 import { REVIEWS_STATE_KEY, ReviewStore } from "./reviews";
 import { createStatusBar } from "./statusBar";
@@ -82,7 +83,33 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("ctun.setWandbKey", () => setWandbKey(context.secrets)),
     vscode.commands.registerCommand("ctun.clearWandbKey", () => context.secrets.delete(WANDB_KEY_SECRET)),
   );
+  void announceLoginBridge(context, (request) =>
+    loginMethod() === "vscode"
+      ? logIn(createCtun(), data, request.cluster, "vscode", request.session_limit)
+      : Promise.resolve(undefined),
+  );
   void data.refresh();
+}
+
+/**
+ * Lets `ctun login -i` from agents and terminals of this window ask here instead of popping up a window.
+ *
+ * Agents started by other extensions inherit this extension host's `process.env`;
+ * integrated terminals get the variable through the environment variable collection.
+ */
+async function announceLoginBridge(context: vscode.ExtensionContext, answer: LoginAnswer): Promise<void> {
+  const bridge = await startLoginBridge(answer);
+  process.env[BRIDGE_VARIABLE] = bridge.address;
+  const terminals = context.environmentVariableCollection;
+  terminals.persistent = false;
+  terminals.description = "Lets `ctun login -i` ask for the password and OTP in this window.";
+  terminals.replace(BRIDGE_VARIABLE, bridge.address);
+  context.subscriptions.push({
+    dispose: () => {
+      delete process.env[BRIDGE_VARIABLE];
+      bridge.close();
+    },
+  });
 }
 
 export function deactivate(): void {}
@@ -93,7 +120,7 @@ function createCtun(): Ctun {
 }
 
 function loginMethod(): LoginMethod {
-  return vscode.workspace.getConfiguration("ctun").get<LoginMethod>("login.method") ?? "window";
+  return vscode.workspace.getConfiguration("ctun").get<LoginMethod>("login.method") ?? "vscode";
 }
 
 /** Asks which live cluster to show; a single one needs no asking. */

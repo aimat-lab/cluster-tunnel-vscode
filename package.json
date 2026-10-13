@@ -4,6 +4,8 @@
   "description": "Shows your HPC clusters and Slurm jobs through the ctun CLI.",
   "version": "0.0.1",
   "publisher": "luguza",
+  "license": "MIT",
+  "icon": "media/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/Luguza/ctun-vscode.git"
@@ -134,7 +136,7 @@
     "watch": "tsc -watch -p .",
     "test": "npm run compile && node --test \"out/test/unit/**/*.test.js\"",
     "test:host": "npm run compile && node out/test/host/runTest.js",
-    "package": "vsce package --skip-license"
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",

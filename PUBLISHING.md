@@ -12,12 +12,11 @@ reserved forever, and a version number can never be reused.
 
 ## 1. Fix what blocks a public release
 
-`npm run package` works today, but these must change before a publish:
+The license (MIT, `LICENSE`) and the icon (`media/icon.png`, redrawn from
+cluster-tunnel's banner) are in place. Check the rest before a publish:
 
 | Item | Now | To do |
 |---|---|---|
-| License | No `LICENSE` yet; `package` uses `--skip-license` | Pick one (matching cluster-tunnel's, once it has one, keeps things simple). Add `LICENSE` and `"license": "<SPDX id>"` to `package.json`. Then remove `--skip-license` from the `package` script. |
-| Icon | None (the activity-bar icon is an SVG, and SVG is not allowed here) | Add a PNG of at least 128×128 px, e.g. `media/icon.png`, and `"icon": "media/icon.png"`. |
 | Publisher | `"publisher": "luguza"` | Must equal the publisher ID you create in step 3. The ID can never change. |
 | Repository | `Luguza/ctun-vscode` (public) | vsce turns README links into absolute URLs from it. If the repo moves, change the URL. |
 | Name | `ctun-vscode` / "ctun — Cluster Tunnel" | The name and display name must be unique on the Marketplace. Search for them first. |

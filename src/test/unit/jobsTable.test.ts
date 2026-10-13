@@ -193,3 +193,20 @@ test("parses Slurm durations", () => {
   assert.strictEqual(slurmDurationSeconds("2-01:00:00"), 176400);
   assert.strictEqual(slurmDurationSeconds("UNLIMITED"), undefined);
 });
+
+test("shows when a job started, or Slurm's estimate while it is queued", () => {
+  const startOf = (id: string, starts: Record<string, string>) => {
+    const jobs = JOBS.map((job) => ({ ...job, start: starts[job.jobid] ?? "N/A" }));
+    const report: JobsReport = { ...JOBS_REPORT, clusters: [{ ...JOBS_REPORT.clusters[0], jobs }] };
+    return rows(table({ report })).find((row) => row.id === id)!.startText;
+  };
+  const starts = { "101": "2026-10-13T14:02:11", "103": "2026-10-14T09:30:00", "94": "None" };
+  assert.match(startOf("101", starts) ?? "", /^Started \S/);
+  assert.match(startOf("103", starts) ?? "", /^Est\. start \S/);
+  assert.strictEqual(startOf("103", {}), "No start estimate yet");
+  assert.strictEqual(startOf("94", starts), undefined);
+});
+
+test("shows no start when ctun does not report one", () => {
+  assert.ok(rows(table()).every((row) => row.startText === undefined));
+});

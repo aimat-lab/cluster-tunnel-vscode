@@ -44,6 +44,8 @@ export interface Job {
   timelimit: string;
   partition: string;
   nodes: string;
+  /** Start time; for a pending job Slurm's estimate, or `N/A` while it has none. Absent from older ctun. */
+  start?: string;
   name: string;
   /** Present when ctun keeps job records for the cluster; null when this job has none. */
   record?: JobRecord | null;

@@ -15,6 +15,8 @@ export const UNASSIGNED = "unassigned";
 const FINISHED_GROUPS: readonly StateGroupId[] = ["completed", "failed", "cancelled"];
 const SHORT_COMMIT_LENGTH = 7;
 const NOTE_PREVIEW_LENGTH = 120;
+/** How Slurm prints a known time; it prints `N/A`, `Unknown` or `None` otherwise. */
+const SLURM_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 
 /** What the person picked above the table. */
 export interface JobsFilters {
@@ -103,6 +105,8 @@ export interface JobRow {
   timeText: string;
   /** Elapsed share of the time limit, 0–1; undefined for an unlimited or unreadable limit. */
   progress: number | undefined;
+  /** When the job started or, if queued, is estimated to start; undefined when unknown. */
+  startText: string | undefined;
   active: boolean;
   partitionNodes: string;
   note: NoteView | undefined;
@@ -308,6 +312,7 @@ function toRow(cluster: string, job: Job, inputs: TableInputs, records: ClusterR
     timeText: `${job.elapsed} / ${job.timelimit}`,
     progress:
       limitSeconds && elapsedSeconds !== undefined ? Math.min(1, elapsedSeconds / limitSeconds) : undefined,
+    startText: startText(job, group),
     active: group === "running" || group === "queued",
     partitionNodes: `${job.partition} · ${job.nodes}`,
     note: job.record ? noteView(job.record, cluster, inputs.reviews) : undefined,
@@ -404,6 +409,18 @@ function stateLabel(job: Job): string {
   }
   const words = state.toLowerCase().replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** `Started …`, or `Est. start …` for a queued job; undefined when ctun gave no start or Slurm has none. */
+function startText(job: Job, group: StateGroupId | undefined): string | undefined {
+  if (job.start === undefined) {
+    return undefined;
+  }
+  const known = SLURM_TIME.test(job.start);
+  if (group === "queued") {
+    return known ? `Est. start ${formatTime(job.start)}` : "No start estimate yet";
+  }
+  return known ? `Started ${formatTime(job.start)}` : undefined;
 }
 
 function formatTime(iso: string): string {

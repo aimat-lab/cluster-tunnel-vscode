@@ -147,6 +147,7 @@
       track.append(fill);
       timeCell.append(track);
     }
+    if (row.startText) timeCell.append(el("div", "small muted start", row.startText));
 
     const actionCell = el("td", "actions");
     const expand = button("icon-button", row.expanded ? "Hide" : "Details", { type: "expand", key: row.key });

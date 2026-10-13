@@ -1,0 +1,11 @@
+src/**
+out/test/**
+**/*.map
+.vscode/**
+.vscode-test/**
+node_modules/**
+tsconfig.json
+.gitignore
+PUBLISHING.md
+.github/**
+.gitattributes

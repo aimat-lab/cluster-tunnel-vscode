@@ -1,0 +1,148 @@
+{
+  "name": "ctun-vscode",
+  "displayName": "ctun — Cluster Tunnel",
+  "description": "Shows your HPC clusters and Slurm jobs through the ctun CLI.",
+  "version": "0.0.1",
+  "publisher": "luguza",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Luguza/ctun-vscode.git"
+  },
+  "private": true,
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ctun",
+          "title": "Clusters",
+          "icon": "media/clusters.svg"
+        }
+      ]
+    },
+    "views": {
+      "ctun": [
+        {
+          "id": "ctun.clusters",
+          "name": "Clusters"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "ctun.clusters",
+        "contents": "Your ctun clusters will show here."
+      }
+    ],
+    "commands": [
+      {
+        "command": "ctun.refresh",
+        "title": "Refresh",
+        "category": "ctun",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ctun.showJobs",
+        "title": "Show Cluster Jobs",
+        "category": "ctun",
+        "icon": "$(table)"
+      },
+      {
+        "command": "ctun.openConfig",
+        "title": "Open ctun Config",
+        "category": "ctun",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "ctun.login",
+        "title": "Log in",
+        "category": "ctun",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "ctun.logout",
+        "title": "Log out",
+        "category": "ctun",
+        "icon": "$(sign-out)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ctun.showJobs",
+          "when": "view == ctun.clusters",
+          "group": "navigation@0"
+        },
+        {
+          "command": "ctun.refresh",
+          "when": "view == ctun.clusters",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ctun.openConfig",
+          "when": "view == ctun.clusters",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ctun.login",
+          "when": "view == ctun.clusters && viewItem == cluster-down",
+          "group": "inline"
+        },
+        {
+          "command": "ctun.logout",
+          "when": "view == ctun.clusters && viewItem == cluster-live",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ctun.login",
+          "when": "false"
+        },
+        {
+          "command": "ctun.logout",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "ctun",
+      "properties": {
+        "ctun.path": {
+          "type": "string",
+          "default": "ctun",
+          "markdownDescription": "Path to the `ctun` executable. The default finds `ctun` on `PATH`."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "test": "npm run compile && node --test \"out/test/unit/**/*.test.js\"",
+    "test:host": "npm run compile && node out/test/host/runTest.js",
+    "package": "vsce package --skip-license"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20.19.0",
+    "@types/vscode": "~1.100.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "jsdom": "^26.1.0",
+    "typescript": "~5.9.3"
+  }
+}

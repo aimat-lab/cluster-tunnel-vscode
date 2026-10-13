@@ -13,7 +13,29 @@ export interface ClusterStatus {
   used_error: string | null;
 }
 
-/** One job of `ctun jobs --json`; every field is a string as Slurm prints it. */
+/** The write-once record ctun keeps on the cluster for a job it submitted. */
+export interface JobRecord {
+  schema_version: number;
+  slurm_cluster: string | null;
+  job_id: string;
+  job_name: string | null;
+  project: string | null;
+  note: string | null;
+  /** ISO 8601, UTC. */
+  submitted_at: string;
+  submitted_from: string;
+  /** Each fact is null when ctun could not read it. */
+  code: {
+    workdir?: string | null;
+    commit?: string | null;
+    branch?: string | null;
+    pushed?: boolean | null;
+    uncommitted?: string[] | null;
+  };
+  command: string[];
+}
+
+/** One job of `ctun jobs --json`; every Slurm field is a string as Slurm prints it. */
 export interface Job {
   source: "active" | "done";
   jobid: string;
@@ -23,6 +45,8 @@ export interface Job {
   partition: string;
   nodes: string;
   name: string;
+  /** Present when ctun keeps job records for the cluster; null when this job has none. */
+  record?: JobRecord | null;
 }
 
 /** One cluster's entry in `ctun jobs --json`. */
@@ -31,6 +55,9 @@ export interface ClusterJobsEntry {
   live: boolean;
   error: string | null;
   jobs: Job[];
+  /** Records of the window whose job squeue/sacct no longer list. */
+  records_without_job?: JobRecord[];
+  records_error?: string | null;
 }
 
 /** The whole output of `ctun jobs --json`. */
@@ -39,10 +66,19 @@ export interface JobsReport {
   clusters: ClusterJobsEntry[];
 }
 
+/** The parts of `ctun -t X info --json` the extension uses. */
+export interface ClusterInfo {
+  cluster: string;
+  requires_otp: boolean;
+  requires_password: boolean;
+  budget: { unit: string; session_limit: number | null };
+}
+
 export type CtunErrorKind =
   | "login_required"
   | "budget_exhausted"
   | "budget_guard_error"
+  | "note_reference_invalid"
   | "timeout"
   | "not_found"
   | "malformed_json"
@@ -53,6 +89,7 @@ const EXIT_CODE_KINDS: Record<number, CtunErrorKind> = {
   10: "login_required",
   11: "budget_exhausted",
   12: "budget_guard_error",
+  13: "note_reference_invalid",
 };
 
 export class CtunError extends Error {
@@ -70,13 +107,15 @@ export const DEFAULT_TIMEOUT_MS = 60_000;
 
 export interface RunOptions {
   timeoutMs?: number;
+  /** Written to ctun's stdin: the only way a secret may reach ctun. */
+  input?: string;
 }
 
 /**
  * Runs the ctun CLI and parses its JSON output.
  *
  * `launcher` is the command line that starts ctun, e.g. `["ctun"]`. Arguments go
- * to ctun as argv without a shell. No method takes a secret.
+ * to ctun as argv without a shell; secrets go only through `RunOptions.input`.
  */
 export class Ctun {
   constructor(
@@ -97,12 +136,16 @@ export class Ctun {
     return this.json<JobsReport>(["jobs", "--json", "--since", since]);
   }
 
+  info(cluster: string): Promise<ClusterInfo> {
+    return this.json<ClusterInfo>([...target(cluster), "info", "--json"]);
+  }
+
   /** Runs ctun with `args` and returns its stdout; throws a `CtunError` on failure. */
   run(args: readonly string[], options: RunOptions = {}): Promise<string> {
     const [file, ...launcherArgs] = this.launcher;
     const timeoutMs = options.timeoutMs ?? this.timeoutMs;
     return new Promise((resolve, reject) => {
-      execFile(
+      const child = execFile(
         file,
         [...launcherArgs, ...args],
         { encoding: "utf8", timeout: timeoutMs, windowsHide: true },
@@ -114,6 +157,7 @@ export class Ctun {
           reject(toCtunError(error, args, timeoutMs, stderr));
         },
       );
+      child.stdin?.end(options.input ?? "");
     });
   }
 

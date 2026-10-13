@@ -59,7 +59,8 @@ button:disabled { cursor: default; opacity: 0.6; }
 .secondary:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
 
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.chip { height: 28px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); }
+.chip, .review-button { height: 28px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); }
+.review-button.pending { border-color: var(--warning); color: var(--vscode-foreground); }
 
 .primary {
   height: 28px;
@@ -71,9 +72,13 @@ button:disabled { cursor: default; opacity: 0.6; }
   font-weight: 500;
 }
 .primary:hover { background: var(--vscode-button-hoverBackground); }
+.link-button { padding: 0; border: 0; background: none; color: var(--vscode-textLink-foreground); }
+.link-button:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
+.icon-button { height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--muted); }
+.icon-button[aria-expanded="true"] { border-color: var(--accent); color: var(--vscode-foreground); }
 
 .table-wrapper { min-width: 0; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
-table { width: 100%; min-width: 620px; border-collapse: collapse; }
+table { width: 100%; min-width: 760px; border-collapse: collapse; }
 th {
   padding: 10px 16px;
   background: var(--surface);
@@ -85,12 +90,47 @@ th {
   text-transform: uppercase;
 }
 td { padding: 10px 16px; border-top: 1px solid var(--border); vertical-align: top; }
+td.actions { text-align: right; }
 .name-cell { max-width: 420px; }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-preview { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.tag {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--warning);
+  border-radius: 3px;
+  color: var(--warning);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.group-row td { padding: 14px 16px 6px; background: var(--vscode-editor-background); border-top: 1px solid var(--border); }
+.job.expanded td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.details-row td { border-top: 0; padding: 4px 16px 16px 16px; background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .empty td { padding: 28px 16px; text-align: center; color: var(--muted); }
 .notice td { background: var(--surface); }
 .notice .row-content { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 p.notice { margin: 0; }
+
+dl.details { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 10px 14px; margin: 0; }
+dl.details dt { color: var(--muted); font-size: 12px; padding-top: 2px; }
+dl.details dd { margin: 0; }
+.note-box { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--vscode-editor-background); }
+.note-box.status-unreviewed { border-color: var(--warning); }
+.note-status { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.note-text { margin: 6px 0 8px; white-space: pre-wrap; }
+.review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.commits summary { cursor: pointer; color: var(--vscode-textLink-foreground); }
+.commit-list { margin: 6px 0 0; padding-left: 20px; }
+
+.review { display: flex; flex-direction: column; gap: 12px; }
+.review-top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.review-top p { margin: 0; }
+.review-card { padding: 14px 16px; border: 1px solid var(--warning); border-radius: 8px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; }
+.references { margin: 0 0 8px; padding: 0; list-style: none; font-size: 12px; }
+.check { color: var(--running); }
+.empty-text { color: var(--muted); }
 
 .dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; display: inline-block; }
 .toggle .dot { color: var(--group-color); }

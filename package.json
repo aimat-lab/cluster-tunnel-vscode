@@ -35,6 +35,10 @@
         {
           "id": "ctun.clusters",
           "name": "Clusters"
+        },
+        {
+          "id": "ctun.projects",
+          "name": "Projects"
         }
       ]
     },
@@ -56,6 +60,27 @@
         "title": "Show Cluster Jobs",
         "category": "ctun",
         "icon": "$(table)"
+      },
+      {
+        "command": "ctun.showReviews",
+        "title": "Review Agent Notes",
+        "category": "ctun",
+        "icon": "$(comment-unresolved)"
+      },
+      {
+        "command": "ctun.filterProject",
+        "title": "Show Project Jobs",
+        "category": "ctun"
+      },
+      {
+        "command": "ctun.setWandbKey",
+        "title": "Set W&B API Key",
+        "category": "ctun"
+      },
+      {
+        "command": "ctun.clearWandbKey",
+        "title": "Remove W&B API Key",
+        "category": "ctun"
       },
       {
         "command": "ctun.openConfig",
@@ -114,6 +139,10 @@
         {
           "command": "ctun.logout",
           "when": "false"
+        },
+        {
+          "command": "ctun.filterProject",
+          "when": "false"
         }
       ]
     },
@@ -124,6 +153,40 @@
           "type": "string",
           "default": "ctun",
           "markdownDescription": "Path to the `ctun` executable. The default finds `ctun` on `PATH`."
+        },
+        "ctun.login.method": {
+          "type": "string",
+          "enum": [
+            "window",
+            "vscode"
+          ],
+          "default": "window",
+          "enumDescriptions": [
+            "ctun's own login window (tkinter).",
+            "VS Code input boxes; the secrets reach ctun on stdin only."
+          ],
+          "markdownDescription": "How **Log in** asks for the session budget, password and OTP."
+        },
+        "ctun.wandb.project": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "W&B project whose runs carry the `slurm:<job id>` tag, e.g. `htfm_multihead`. Empty turns the Training line off."
+        },
+        "ctun.wandb.entity": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "W&B entity (user or team) of that project. Empty means the API key's own entity."
+        },
+        "ctun.wandb.metrics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "val/loss",
+            "val/mae_T_trans"
+          ],
+          "markdownDescription": "Summary metrics shown for a job's W&B run."
         }
       }
     }

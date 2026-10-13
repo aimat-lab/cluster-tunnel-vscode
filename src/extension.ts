@@ -1,17 +1,38 @@
 import * as vscode from "vscode";
 import { ClusterData } from "./clusterData";
 import { ClusterNode, ClustersView } from "./clustersView";
+import { loadChanges } from "./codeChanges";
 import { Ctun } from "./ctun";
-import { JobsPanel } from "./jobsPanel";
-import { logIn, logOut } from "./login";
+import { JobsPanel, JobsPanelServices } from "./jobsPanel";
+import { pendingReviews } from "./jobsTable";
+import { LoginMethod, logIn, logOut } from "./login";
+import { ProjectsView } from "./projectsView";
+import { REVIEWS_STATE_KEY, ReviewStore } from "./reviews";
 import { createStatusBar } from "./statusBar";
+import { setWandbKey, trainingLookup, WANDB_KEY_SECRET } from "./training";
 
 export function activate(context: vscode.ExtensionContext): void {
   const data = new ClusterData(createCtun);
+  const reviews = new ReviewStore(context.globalState);
+  // D8: reviews live in globalState, which Settings Sync carries to the user's other machines.
+  context.globalState.setKeysForSync([REVIEWS_STATE_KEY]);
+  const reviewsChanged = new vscode.EventEmitter<void>();
+  const pendingCount = () => pendingReviews(data.jobs, reviews.all()).length;
+
   const clustersView = vscode.window.createTreeView("ctun.clusters", { treeDataProvider: new ClustersView(data) });
+  const projectsView = vscode.window.createTreeView("ctun.projects", { treeDataProvider: new ProjectsView(data) });
+  const updateBadge = () => {
+    const pending = pendingCount();
+    clustersView.badge = pending > 0 ? { value: pending, tooltip: `${pending} agent notes to review` } : undefined;
+  };
 
   data.onDidChange(() => {
     clustersView.message = data.error ? `ctun failed: ${data.error.message}` : undefined;
+    updateBadge();
+  });
+  reviewsChanged.event(() => {
+    updateBadge();
+    JobsPanel.refreshView();
   });
   clustersView.onDidChangeVisibility(({ visible }) => {
     if (visible) {
@@ -19,19 +40,34 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   });
 
+  const services: JobsPanelServices = {
+    data,
+    reviews,
+    onReviewsChanged: () => reviewsChanged.fire(),
+    loadTraining: trainingLookup(context.secrets),
+    loadChanges: (cluster, workdir, fromCommit, toCommit) => loadChanges(createCtun(), cluster, workdir, fromCommit, toCommit),
+  };
+  const showJobs = () => JobsPanel.show(context.extensionUri, services);
+
   context.subscriptions.push(
     data,
     clustersView,
-    createStatusBar(data),
+    projectsView,
+    reviewsChanged,
+    createStatusBar(data, pendingCount, reviewsChanged.event),
     vscode.commands.registerCommand("ctun.refresh", () => data.refresh()),
     vscode.commands.registerCommand("ctun.openConfig", () => openConfig(createCtun())),
-    vscode.commands.registerCommand("ctun.showJobs", () => JobsPanel.show(context.extensionUri, data)),
+    vscode.commands.registerCommand("ctun.showJobs", showJobs),
+    vscode.commands.registerCommand("ctun.showReviews", () => showJobs().showReviews()),
+    vscode.commands.registerCommand("ctun.filterProject", (project: string) => showJobs().filterProject(project)),
     vscode.commands.registerCommand("ctun.login", (cluster: string | ClusterNode) =>
-      logIn(createCtun(), data, clusterName(cluster)),
+      logIn(createCtun(), data, clusterName(cluster), loginMethod()),
     ),
     vscode.commands.registerCommand("ctun.logout", (cluster: string | ClusterNode) =>
       logOut(createCtun(), data, clusterName(cluster)),
     ),
+    vscode.commands.registerCommand("ctun.setWandbKey", () => setWandbKey(context.secrets)),
+    vscode.commands.registerCommand("ctun.clearWandbKey", () => context.secrets.delete(WANDB_KEY_SECRET)),
   );
   void data.refresh();
 }
@@ -41,6 +77,10 @@ export function deactivate(): void {}
 function createCtun(): Ctun {
   const ctunPath = vscode.workspace.getConfiguration("ctun").get<string>("path") || "ctun";
   return new Ctun([ctunPath]);
+}
+
+function loginMethod(): LoginMethod {
+  return vscode.workspace.getConfiguration("ctun").get<LoginMethod>("login.method") ?? "window";
 }
 
 /** The tree's login hint passes a name; its inline buttons pass the node. */

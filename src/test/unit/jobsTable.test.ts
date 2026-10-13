@@ -1,26 +1,58 @@
 import * as assert from "assert";
 import { test } from "node:test";
 import type { JobsReport } from "../../ctun";
-import { buildJobsTable, DEFAULT_FILTERS, effectiveSince, JobsFilters, slurmDurationSeconds, TableInputs } from "../../jobsTable";
+import {
+  buildJobsTable,
+  DEFAULT_FILTERS,
+  effectiveSince,
+  JobRow,
+  JobsFilters,
+  noteReferences,
+  pendingReviews,
+  RowExtras,
+  slurmDurationSeconds,
+  TableInputs,
+  UNASSIGNED,
+} from "../../jobsTable";
+import type { Review } from "../../reviews";
 import { GUARDED_STATUS, JOBS, JOBS_REPORT, LOGGED_OUT_STATUS } from "../fixtures/ctunOutput";
+
+const STATUSES = [LOGGED_OUT_STATUS, GUARDED_STATUS];
 
 function table(overrides: Partial<Omit<TableInputs, "filters">> & { filters?: Partial<JobsFilters> } = {}) {
   const { filters, ...rest } = overrides;
   return buildJobsTable({
-    statuses: [LOGGED_OUT_STATUS, GUARDED_STATUS],
+    statuses: STATUSES,
     report: JOBS_REPORT,
     loggingIn: new Set(),
     updatedAt: undefined,
+    reviews: {},
+    mode: "jobs",
+    expanded: new Set(),
+    extras: new Map<string, RowExtras>(),
     ...rest,
     filters: { ...DEFAULT_FILTERS, ...filters },
   });
 }
 
+function rows(model: ReturnType<typeof table>): JobRow[] {
+  return model.groups.flatMap((group) => group.rows);
+}
+
 test("renders every state with its label", () => {
   const model = table();
   assert.deepStrictEqual(
-    model.rows.map((row) => row.stateLabel),
-    ["Running", "Running", "Queued", "Completed", "Failed", "Timeout", "Out of memory", "Cancelled"],
+    rows(model).map((row) => [row.id, row.stateLabel]),
+    [
+      ["101", "Running"],
+      ["102", "Running"],
+      ["91", "Failed"],
+      ["103", "Queued"],
+      ["90", "Completed"],
+      ["92", "Timeout"],
+      ["93", "Out of memory"],
+      ["94", "Cancelled"],
+    ],
   );
   assert.deepStrictEqual(
     model.toggles.map((toggle) => [toggle.id, toggle.count]),
@@ -28,20 +60,37 @@ test("renders every state with its label", () => {
   );
 });
 
+test("groups rows by project with Unassigned last", () => {
+  const model = table();
+  assert.deepStrictEqual(
+    model.groups.map((group) => [group.label, group.rows.length]),
+    [["htfm", 3], ["legacy", 1], ["Unassigned", 4]],
+  );
+  assert.deepStrictEqual(
+    model.projects.map((project) => [project.label, project.count]),
+    [["All projects", 8], ["htfm", 3], ["legacy", 1], ["Unassigned", 4]],
+  );
+});
+
+test("the project filter combines with the state toggles and the cluster chip", () => {
+  const onlyFailed = { running: false, queued: false, completed: false, failed: true, cancelled: false };
+  const htfmFailed = table({ filters: { project: "htfm", shownGroups: onlyFailed, cluster: "haicore" } });
+  assert.deepStrictEqual(rows(htfmFailed).map((row) => row.id), ["91"]);
+  assert.strictEqual(htfmFailed.toggles.find((toggle) => toggle.id === "running")!.count, 2);
+
+  const unassigned = table({ filters: { project: UNASSIGNED } });
+  assert.deepStrictEqual(rows(unassigned).map((row) => row.id), ["90", "92", "93", "94"]);
+});
+
 test("a state toggle hides its jobs but keeps its count", () => {
   const model = table({ filters: { shownGroups: { ...DEFAULT_FILTERS.shownGroups, failed: false } } });
-  assert.ok(model.rows.every((row) => row.group !== "failed"));
+  assert.ok(rows(model).every((row) => row.group !== "failed"));
   assert.strictEqual(model.toggles.find((toggle) => toggle.id === "failed")!.count, 3);
 });
 
-test("the cluster chip combines with the toggles", () => {
-  const onlyQueued = { running: false, queued: true, completed: false, failed: false, cancelled: false };
-  const haicore = table({ filters: { cluster: "haicore", shownGroups: onlyQueued } });
-  assert.deepStrictEqual(haicore.rows.map((row) => row.id), ["103"]);
-  assert.deepStrictEqual(haicore.lockedClusters, []);
-
-  const bwuni3 = table({ filters: { cluster: "bwuni3", shownGroups: onlyQueued } });
-  assert.deepStrictEqual(bwuni3.rows, []);
+test("the cluster chip shows a logged-out cluster as locked", () => {
+  const bwuni3 = table({ filters: { cluster: "bwuni3" } });
+  assert.deepStrictEqual(rows(bwuni3), []);
   assert.deepStrictEqual(bwuni3.lockedClusters, [{ cluster: "bwuni3", loggingIn: false }]);
   assert.strictEqual(bwuni3.showEmpty, false);
 });
@@ -55,19 +104,86 @@ test("the window goes to ctun unless no finished job is shown", () => {
 test("shows the empty state and per-cluster errors", () => {
   const report: JobsReport = {
     since_minutes: 1440,
-    clusters: [{ cluster: "haicore", live: true, error: "squeue failed", jobs: [] }],
+    clusters: [{ cluster: "haicore", live: true, error: "squeue failed", jobs: [], records_error: "scontrol failed" }],
   };
   const model = table({ statuses: [GUARDED_STATUS], report });
   assert.strictEqual(model.showEmpty, true);
-  assert.deepStrictEqual(model.errors, [{ cluster: "haicore", message: "squeue failed" }]);
+  assert.deepStrictEqual(model.errors, [
+    { cluster: "haicore", message: "squeue failed" },
+    { cluster: "haicore", message: "job records: scontrol failed" },
+  ]);
+});
+
+test("a note is an unreviewed draft until reviewed; an edit replaces its text", () => {
+  const unreviewed = rows(table()).find((row) => row.id === "101")!;
+  assert.strictEqual(unreviewed.note?.status, "unreviewed");
+  assert.strictEqual(unreviewed.note?.reviewKey, "haic/101");
+
+  const reviews: Record<string, Review> = {
+    "haic/101": { status: "edited", text: "Rerun with fixed paths.", at: "2026-10-12T12:00:00Z" },
+    "haic/102": { status: "discarded", at: "2026-10-12T12:00:00Z" },
+  };
+  const reviewed = rows(table({ reviews }));
+  assert.strictEqual(reviewed.find((row) => row.id === "101")!.note?.text, "Rerun with fixed paths.");
+  assert.strictEqual(reviewed.find((row) => row.id === "102")!.note?.status, "discarded");
+  assert.strictEqual(rows(table()).find((row) => row.id === "103")!.note, undefined);
+});
+
+test("pending reviews include records without a listed job and skip reviewed ones", () => {
+  const all = pendingReviews(JOBS_REPORT, {});
+  assert.deepStrictEqual(all.map((card) => card.id), ["102", "101", "80"]);
+  assert.deepStrictEqual(all.find((card) => card.id === "101")!.references, ["job:91", "commit:87d86d4"]);
+  assert.strictEqual(all.find((card) => card.id === "80")!.stateLabel, "Not listed");
+
+  const afterConfirm = pendingReviews(JOBS_REPORT, { "haic/102": { status: "confirmed", at: "x" } });
+  assert.deepStrictEqual(afterConfirm.map((card) => card.id), ["101", "80"]);
+  assert.strictEqual(table().pendingCount, 3);
+});
+
+test("details show the code facts, the submitter and the previous run", () => {
+  const model = table({ expanded: new Set(["haicore/101", "haicore/103"]) });
+  const details = rows(model).find((row) => row.id === "101")!.details!;
+  assert.deepStrictEqual(details.code, { commit: "87d86d4", branch: "main", pushed: true, uncommitted: 0, workdir: "/work/repo" });
+  assert.match(details.from!, /^laptop · /);
+  assert.deepStrictEqual(details.previous, { id: "91", cluster: "haicore", stateLabel: "Failed", sameCommit: false });
+  assert.deepStrictEqual(details.changesRequest, {
+    cluster: "haicore",
+    workdir: "/work/repo",
+    fromCommit: "a60bc60bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    toCommit: "87d86d4aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  });
+
+  const unpushed = rows(model).find((row) => row.id === "103")!.details!;
+  assert.strictEqual(unpushed.code?.pushed, false);
+  assert.strictEqual(unpushed.code?.uncommitted, 1);
+  assert.strictEqual(unpushed.previous, undefined);
+  assert.strictEqual(rows(model).find((row) => row.id === "102")!.details, undefined);
+});
+
+test("details carry the loaded training line and commit list", () => {
+  const extras = new Map<string, RowExtras>([
+    [
+      "haicore/101",
+      {
+        training: { state: "loaded", text: "epoch 31 · val/loss 0.690", url: "https://wandb.ai/e/p/runs/r" },
+        changes: { state: "loaded", commits: [{ hash: "87d86d4", message: "Fix paths" }] },
+      },
+    ],
+  ]);
+  const details = rows(table({ expanded: new Set(["haicore/101"]), extras })).find((row) => row.id === "101")!.details!;
+  assert.strictEqual(details.training?.state, "loaded");
+  assert.deepStrictEqual(details.changes, { state: "loaded", commits: [{ hash: "87d86d4", message: "Fix paths" }] });
+});
+
+test("finds the marked references in a note", () => {
+  assert.deepStrictEqual(noteReferences("job:7 then commit:abcdef1, job:7 again, commit:zz"), ["job:7", "commit:abcdef1"]);
 });
 
 test("computes the elapsed share of the time limit", () => {
-  const running = table().rows[0];
+  const running = rows(table()).find((row) => row.id === "101")!;
   assert.strictEqual(running.progress, 3600 / (10.5 * 3600));
   assert.strictEqual(running.active, true);
-  assert.strictEqual(running.key, "haicore/101");
-  assert.strictEqual(JOBS.length, table().rows.length);
+  assert.strictEqual(JOBS.length, rows(table()).length);
 });
 
 test("parses Slurm durations", () => {

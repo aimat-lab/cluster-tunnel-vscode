@@ -2,24 +2,41 @@
 
 Shows your HPC clusters and Slurm jobs in VS Code, through the
 [`ctun`](https://github.com/aimat-lab/cluster-tunnel) CLI. The extension is a thin
-wrapper: every value comes from `ctun status -j` and `ctun jobs --json`. It has no
-SSH of its own and never sees a password or one-time passcode.
+wrapper: every cluster value comes from `ctun` (`status -j`, `jobs --json`, `run`),
+and only the optional W&B line talks to the W&B API, with your key. It has no SSH
+of its own. A password or OTP passes through it only with the optional VS Code
+login, straight to ctun's stdin.
 
 - **Clusters view** (activity bar): each configured cluster with its tunnel state,
   session start, budget used / limit, commands sent and running / queued jobs.
-  Log in opens ctun's own login window; log out closes the tunnel.
-- **Cluster jobs** tab: one list of the jobs on every connected cluster, filtered by
-  state (Running, Queued, Completed, Failed, Cancelled), by an "Ended in" window
-  (24 h, 7 d, 30 d) and by cluster. It refreshes every 60 s while it is visible.
-- **Status bar**: how many clusters are connected, and their budget use.
+  Log in opens ctun's own login window, or VS Code input boxes
+  (`ctun.login.method`); log out closes the tunnel. Below it, **Projects** lists
+  the jobs per `--project`; a click filters the table.
+- **Cluster jobs** tab: one list of the jobs on every connected cluster, grouped by
+  project and filtered by state (Running, Queued, Completed, Failed, Cancelled), by
+  an "Ended in" window (24 h, 7 d, 30 d), by cluster and by project. It refreshes
+  every 60 s while it is visible. **Details** on a row shows:
+  - the agent's **note**, an unreviewed draft until you confirm, edit or discard it;
+  - **Training**: epoch and metrics of the job's W&B run (found by its
+    `slurm:<job id>` tag) and a link to it;
+  - **Code**: the commit at submit time, whether it was pushed, uncommitted files;
+  - **From**: the machine and time of the submission;
+  - **Changes**: the previous run of the same project and job name, and the
+    commits between the two (`git log` on the cluster, loaded on request).
+- **To review**: all notes no one has reviewed yet, as cards. Reviews stay in VS
+  Code (Settings Sync carries them to your other machines); the record on the
+  cluster never changes, and the agent has no command for reviews. The activity
+  bar badge and the status bar show how many wait.
+- **Status bar**: connected clusters, notes to review, and budget use.
 
-Job records, agent notes, projects, code facts and W&B metrics are being built on
-the [`dev`](https://github.com/Luguza/ctun-vscode/tree/dev) branch; they need a
-newer ctun.
+Notes, projects and code facts come from the job records that `ctun run` writes
+on the cluster (ctun with job records; see its `reference.md`). Jobs submitted
+without them show only the Slurm columns.
 
 ## Requirements
 
-- `ctun` 0.5.0 or later, configured (`ctun config --init`), on `PATH` or set in
+- `ctun` with job records (newer than 0.5.0) for notes, projects and code facts; 0.5.0
+  shows the Slurm columns only. Configured (`ctun config --init`), on `PATH` or set in
   `ctun.path`. On Windows, ctun runs ssh inside WSL 2; see ctun's README.
 - A display for ctun's login window (it is a small tkinter dialog).
 
@@ -38,12 +55,20 @@ or, in VS Code: Extensions view → `…` → **Install from VSIX…**.
 | Setting | Default | Meaning |
 |---|---|---|
 | `ctun.path` | `ctun` | The `ctun` executable. Use an absolute path if VS Code does not find it on `PATH`, e.g. `C:\Users\<you>\.local\bin\ctun.exe`. |
+| `ctun.login.method` | `window` | `window`: ctun's login window. `vscode`: VS Code input boxes for budget, OTP and password; the secrets reach ctun on stdin only (`ctun login --credentials-stdin`). |
+| `ctun.wandb.project` | empty | W&B project of the runs, e.g. `htfm_multihead`. Empty turns the Training line off. |
+| `ctun.wandb.entity` | empty | W&B user or team; empty means the API key's own. |
+| `ctun.wandb.metrics` | `val/loss`, `val/mae_T_trans` | Summary metrics shown per run. |
+
+The W&B API key goes in VS Code's SecretStorage: run **ctun: Set W&B API Key**.
 
 ## Commands
 
 | Command | Where |
 |---|---|
 | ctun: Show Cluster Jobs | Clusters view title, the "Jobs" row |
+| ctun: Review Agent Notes | status bar, "To review" button |
+| ctun: Set / Remove W&B API Key | Command Palette |
 | ctun: Refresh | Clusters view title |
 | ctun: Open ctun Config | Clusters view title |
 | Log in / Log out | the icon on a cluster's row |

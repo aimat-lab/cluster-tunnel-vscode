@@ -13,12 +13,24 @@ test("passes the arguments to ctun and parses its JSON", async () => {
   assert.deepStrictEqual(report, ["jobs", "--json", "--since", "24h"]);
 });
 
+test("sends input on stdin, not in argv", async () => {
+  const secret = JSON.stringify({ password: "s3cret" });
+  const output = await fakeCtun("echo-stdin").run(["-t", "haicore", "login", "--credentials-stdin"], { input: secret });
+  const { args, stdin } = JSON.parse(output);
+  assert.strictEqual(stdin, secret);
+  assert.ok(!args.join(" ").includes("s3cret"));
+});
+
 test("maps ctun's exit code 10 to login_required", async () => {
   await assert.rejects(fakeCtun("exit:10").status(), (error: CtunError) => {
     assert.strictEqual(error.kind, "login_required");
     assert.match(error.stderr, /ctun-error: some_marker/);
     return true;
   });
+});
+
+test("maps exit code 13 to note_reference_invalid", async () => {
+  await assert.rejects(fakeCtun("exit:13").status(), { kind: "note_reference_invalid" });
 });
 
 test("maps any other exit code to failed", async () => {

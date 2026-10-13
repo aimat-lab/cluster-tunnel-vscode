@@ -402,7 +402,7 @@ export function previousRun(record: JobRecord, records: readonly ClusterRecord[]
 }
 
 /** `PENDING` → `Queued`; any other state in sentence case: `OUT_OF_MEMORY` → `Out of memory`. */
-function stateLabel(job: Job): string {
+export function stateLabel(job: Job): string {
   const state = baseState(job);
   if (state === "PENDING") {
     return "Queued";
@@ -416,11 +416,16 @@ function startText(job: Job, group: StateGroupId | undefined): string | undefine
   if (job.start === undefined) {
     return undefined;
   }
-  const known = SLURM_TIME.test(job.start);
+  const start = slurmTime(job.start);
   if (group === "queued") {
-    return known ? `Est. start ${formatTime(job.start)}` : "No start estimate yet";
+    return start ? `Est. start ${start}` : "No start estimate yet";
   }
-  return known ? `Started ${formatTime(job.start)}` : undefined;
+  return start ? `Started ${start}` : undefined;
+}
+
+/** A Slurm time in the table's format; undefined for `N/A`, `Unknown`, `None` or no time at all. */
+export function slurmTime(value: string | undefined): string | undefined {
+  return value !== undefined && SLURM_TIME.test(value) ? formatTime(value) : undefined;
 }
 
 function formatTime(iso: string): string {

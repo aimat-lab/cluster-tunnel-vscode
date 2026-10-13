@@ -63,6 +63,12 @@
         "icon": "$(table)"
       },
       {
+        "command": "ctun.showCommands",
+        "title": "Show Commands Sent",
+        "category": "ctun",
+        "icon": "$(terminal)"
+      },
+      {
         "command": "ctun.showReviews",
         "title": "Review Agent Notes",
         "category": "ctun",

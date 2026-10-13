@@ -68,6 +68,20 @@ export interface JobsReport {
   clusters: ClusterJobsEntry[];
 }
 
+/** One command of `ctun -t X logs --json`. */
+export interface LoggedCommand {
+  epoch: number;
+  command: string[];
+  /** The jobs the command submitted; absent when it submitted none, and from older ctun. */
+  job_ids?: string[];
+}
+
+/** The output of `ctun -t X logs --json`: the commands sent this session, oldest first. */
+export interface CommandLog {
+  cluster: string;
+  commands: LoggedCommand[];
+}
+
 /** The parts of `ctun -t X info --json` the extension uses. */
 export interface ClusterInfo {
   cluster: string;
@@ -136,6 +150,11 @@ export class Ctun {
   /** `since` is a ctun duration such as `24h`; `0` skips finished jobs. */
   jobs(since: string): Promise<JobsReport> {
     return this.json<JobsReport>(["jobs", "--json", "--since", since]);
+  }
+
+  /** The commands sent to `cluster` this session; a local file read, no SSH. */
+  logs(cluster: string): Promise<CommandLog> {
+    return this.json<CommandLog>([...target(cluster), "logs", "--json"]);
   }
 
   info(cluster: string): Promise<ClusterInfo> {

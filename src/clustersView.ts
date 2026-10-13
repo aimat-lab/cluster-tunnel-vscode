@@ -71,12 +71,9 @@ export class ClustersView implements vscode.TreeDataProvider<Node> {
     const jobs = detailItem("Jobs", summary.jobs);
     jobs.tooltip = clusterJobs?.error ?? undefined;
     jobs.command = { command: "ctun.showJobs", title: "Show cluster jobs" };
-    return [
-      detailItem("Session", summary.session),
-      detailItem("Budget", summary.budget + budgetBar),
-      detailItem("Commands", summary.commands),
-      jobs,
-    ];
+    const commands = detailItem("Commands", summary.commands);
+    commands.command = { command: "ctun.showCommands", title: "Show the commands", arguments: [status.cluster] };
+    return [detailItem("Session", summary.session), detailItem("Budget", summary.budget + budgetBar), commands, jobs];
   }
 }
 

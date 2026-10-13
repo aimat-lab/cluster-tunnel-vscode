@@ -23,3 +23,12 @@ All notable changes to the ctun VS Code extension. The format follows
   and a link; the API key lives in SecretStorage.
 - Native login (`ctun.login.method: vscode`): budget, OTP and password in VS Code
   input boxes, passed to `ctun login --credentials-stdin`.
+- "Commands · <cluster>" tab from `ctun logs --json`: the commands sent this
+  session as a transcript, the jobs each `sbatch` submitted and each `scancel`
+  named with their state, and a link to the job in "Cluster jobs". Refreshes the
+  log every 10 s and the job states every 60 s while visible.
+- "Cluster jobs" scrolls to a job that another tab shows, and turns on its state
+  toggle.
+- The Clusters view shows the tunnels as soon as `ctun status` answers, before
+  the budget probes and `ctun jobs`. A view or tab that comes back into sight
+  reloads only data older than 15 s; Refresh always reloads.

@@ -13,7 +13,7 @@ import {
   RowExtras,
   TrainingState,
 } from "./jobsTable";
-import type { StateGroupId } from "./jobStates";
+import { StateGroupId, stateGroup } from "./jobStates";
 import type { ReviewStatus, ReviewStore } from "./reviews";
 
 /** Each refresh runs `sacct` on a login node, so not more often than this. */
@@ -55,6 +55,8 @@ export class JobsPanel {
   private readonly extras = new Map<string, RowExtras>();
   private refreshTimer: NodeJS.Timeout | undefined;
   private refreshing = false;
+  /** The row the webview scrolls to; `serial` grows with each request, so the same row can be revealed again. */
+  private reveal: { key: string; serial: number } | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
   static show(extensionUri: vscode.Uri, services: JobsPanelServices): JobsPanel {
@@ -105,6 +107,17 @@ export class JobsPanel {
     this.post();
   }
 
+  /** Opens one job's details and scrolls to it; no filter, not even its state toggle, hides it. */
+  revealJob(key: string): void {
+    this.mode = "jobs";
+    this.expanded.add(key);
+    this.reveal = { key, serial: (this.reveal?.serial ?? 0) + 1 };
+    const group = this.groupOf(key);
+    const shownGroups = group ? { ...this.filters.shownGroups, [group]: true } : this.filters.shownGroups;
+    this.setFilters({ ...this.filters, shownGroups, cluster: ALL_CLUSTERS, project: ALL_PROJECTS });
+    void this.loadTraining(key);
+  }
+
   private async handle(message: WebviewMessage): Promise<void> {
     switch (message.type) {
       case "ready":
@@ -145,10 +158,7 @@ export class JobsPanel {
         await this.loadChanges(message.key);
         return;
       case "showJob":
-        this.mode = "jobs";
-        this.expanded.add(message.key);
-        this.setFilters({ ...this.filters, cluster: ALL_CLUSTERS, project: ALL_PROJECTS });
-        void this.loadTraining(message.key);
+        this.revealJob(message.key);
         return;
       case "openUrl":
         if (message.url.startsWith("https://wandb.ai/")) {
@@ -204,6 +214,13 @@ export class JobsPanel {
     return card?.note ?? row?.note?.text ?? "";
   }
 
+  private groupOf(key: string): StateGroupId | undefined {
+    const [cluster, ...jobIdParts] = key.split("/");
+    const jobId = jobIdParts.join("/");
+    const job = this.services.data.jobsOf(cluster)?.jobs.find((candidate) => candidate.jobid === jobId);
+    return job && stateGroup(job);
+  }
+
   private async loadTraining(key: string): Promise<void> {
     const jobId = key.split("/").slice(1).join("/");
     this.setExtras(key, { training: { state: "loading" } });
@@ -226,23 +243,23 @@ export class JobsPanel {
     this.post();
   }
 
-  private async refresh(): Promise<void> {
+  private async refresh(onlyIfStale = false): Promise<void> {
     this.refreshing = true;
     this.post();
     try {
-      await this.services.data.refresh();
+      await (onlyIfStale ? this.services.data.refreshIfStale() : this.services.data.refresh());
     } finally {
       this.refreshing = false;
       this.post();
     }
   }
 
-  /** Refreshes when the tab shows and every minute while it stays visible. */
+  /** Refreshes when the tab shows, unless the data is fresh, and every minute while it stays visible. */
   private followVisibility(): void {
     clearInterval(this.refreshTimer);
     this.refreshTimer = undefined;
     if (this.panel.visible) {
-      void this.refresh();
+      void this.refresh(true);
       this.refreshTimer = setInterval(() => void this.refresh(), AUTO_REFRESH_MS);
     }
   }
@@ -268,6 +285,7 @@ export class JobsPanel {
       model: this.model(),
       refreshing: this.refreshing,
       error: this.services.data.error?.message,
+      reveal: this.reveal,
     });
   }
 

@@ -23,6 +23,12 @@ login, straight to ctun's stdin.
   - **From**: the machine and time of the submission;
   - **Changes**: the previous run of the same project and job name, and the
     commits between the two (`git log` on the cluster, loaded on request).
+- **Commands** tab (`Commands · <cluster>`): the commands sent to one cluster this
+  session, as a console transcript from `ctun logs --json`, with a divider where
+  five minutes or more passed. Under each `sbatch` and `scancel`, a box names the
+  job with its state and run time; a click on the job ID opens it in "Cluster
+  jobs". Copy all copies the commands, one per line. Open it from the
+  "Commands" row of a cluster or with **ctun: Show Commands Sent**.
 - **To review**: all notes no one has reviewed yet, as cards. Reviews stay in VS
   Code (Settings Sync carries them to your other machines); the record on the
   cluster never changes, and the agent has no command for reviews. The activity
@@ -35,8 +41,9 @@ without them show only the Slurm columns.
 
 ## Requirements
 
-- `ctun` with job records (newer than 0.5.0) for notes, projects and code facts; 0.5.0
-  shows the Slurm columns only. Configured (`ctun config --init`), on `PATH` or set in
+- `ctun` with job records (newer than 0.5.0) for notes, projects and code facts, and
+  for the jobs under each command in the Commands tab; 0.5.0 shows the Slurm columns
+  and the bare commands only. Configured (`ctun config --init`), on `PATH` or set in
   `ctun.path`. On Windows, ctun runs ssh inside WSL 2; see ctun's README.
 - A display for ctun's login window (it is a small tkinter dialog).
 
@@ -55,7 +62,7 @@ or, in VS Code: Extensions view → `…` → **Install from VSIX…**.
 | Setting | Default | Meaning |
 |---|---|---|
 | `ctun.path` | `ctun` | The `ctun` executable. Use an absolute path if VS Code does not find it on `PATH`, e.g. `C:\Users\<you>\.local\bin\ctun.exe`. |
-| `ctun.login.method` | `window` | `window`: ctun's login window. `vscode`: VS Code input boxes for budget, OTP and password; the secrets reach ctun on stdin only (`ctun login --credentials-stdin`). |
+| Command | Where |
 | `ctun.wandb.project` | empty | W&B project of the runs, e.g. `htfm_multihead`. Empty turns the Training line off. |
 | `ctun.wandb.entity` | empty | W&B user or team; empty means the API key's own. |
 | `ctun.wandb.metrics` | `val/loss`, `val/mae_T_trans` | Summary metrics shown per run. |
@@ -67,6 +74,7 @@ The W&B API key goes in VS Code's SecretStorage: run **ctun: Set W&B API Key**.
 | Command | Where |
 |---|---|
 | ctun: Show Cluster Jobs | Clusters view title, the "Jobs" row |
+| ctun: Show Commands Sent | the "Commands" row, Command Palette |
 | ctun: Review Agent Notes | status bar, "To review" button |
 | ctun: Set / Remove W&B API Key | Command Palette |
 | ctun: Refresh | Clusters view title |

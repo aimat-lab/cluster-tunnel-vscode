@@ -8,6 +8,8 @@
   const COLUMN_COUNT = 6;
   /** Row keys whose commit list is open; kept here so a re-render does not close it. */
   const openCommitLists = new Set();
+  /** The serial of the last reveal request the table scrolled to. */
+  let revealedSerial = 0;
 
   /** Creates an element with a class and text; text never goes through innerHTML. */
   function el(tag, className, text) {
@@ -120,6 +122,7 @@
 
   function jobRow(row) {
     const tr = el("tr", row.expanded ? "job expanded" : "job");
+    tr.dataset.rowKey = row.key;
 
     const idCell = el("td");
     idCell.append(el("div", "", row.cluster), el("div", "mono muted", row.id));
@@ -351,7 +354,17 @@
     app.append(model.mode === "review" ? reviewView(model) : table(model));
     app.setAttribute("aria-busy", String(message.refreshing));
     restoreFocus(focusedKey);
+    scrollToRevealed(message.reveal);
   });
+
+  /** Scrolls to the row another tab asked for, once; waits for a later model while the row is not there yet. */
+  function scrollToRevealed(reveal) {
+    if (!reveal || reveal.serial === revealedSerial) return;
+    const row = [...app.querySelectorAll("tr.job")].find((node) => node.dataset.rowKey === reveal.key);
+    if (!row) return;
+    revealedSerial = reveal.serial;
+    row.scrollIntoView({ block: "center" });
+  }
 
   /** Re-rendering replaces the controls; put the focus back on the one that had it. */
   function restoreFocus(key) {

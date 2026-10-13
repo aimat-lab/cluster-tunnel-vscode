@@ -3,6 +3,9 @@ import { ClusterStatus, Ctun, CtunError, JobsReport } from "./ctun";
 import type { ClusterJobs } from "./clusterSummary";
 import { CLUSTERS_VIEW_ID } from "./clustersView";
 
+/** Data this young is shown as it is when a view comes back into sight; Refresh still reloads it. */
+const FRESH_FOR_MS = 15_000;
+
 /**
  * The latest cluster statuses and jobs from ctun, shared by every view.
  *
@@ -34,6 +37,12 @@ export class ClusterData implements vscode.Disposable {
     return this.pendingRefresh;
   }
 
+  /** Refreshes unless the last refresh is younger than `FRESH_FOR_MS`, e.g. when a tab comes back into view. */
+  refreshIfStale(): Promise<void> {
+    const isFresh = this.updatedAt !== undefined && Date.now() - this.updatedAt.getTime() < FRESH_FOR_MS;
+    return isFresh ? Promise.resolve() : this.refresh();
+  }
+
   private async loadWithProgress(): Promise<void> {
     await vscode.window.withProgress({ location: { viewId: CLUSTERS_VIEW_ID } }, () => this.load());
   }
@@ -54,9 +63,7 @@ export class ClusterData implements vscode.Disposable {
   private async load(): Promise<void> {
     const ctun = this.ctun();
     try {
-      const [statuses, jobs] = await Promise.all([this.loadStatuses(ctun), ctun.jobs(this.since)]);
-      this.statuses = statuses;
-      this.jobs = jobs;
+      await Promise.all([this.loadStatuses(ctun), this.loadJobs(ctun)]);
       this.error = undefined;
       this.updatedAt = new Date();
     } catch (error) {
@@ -68,10 +75,13 @@ export class ClusterData implements vscode.Disposable {
     this.changed.fire();
   }
 
-  private async loadStatuses(ctun: Ctun): Promise<ClusterStatus[]> {
+  /** Shows the overview as soon as it arrives, then each budget use as its probe answers. */
+  private async loadStatuses(ctun: Ctun): Promise<void> {
     const overview = await ctun.status();
+    this.statuses = overview.map((status) => this.withLastMeasurement(status));
+    this.changed.fire();
     const isGuardedAndLive = (status: ClusterStatus) => status.live && status.limit !== null;
-    return Promise.all(
+    this.statuses = await Promise.all(
       overview.map(async (status) => {
         if (!isGuardedAndLive(status)) {
           return status;
@@ -80,5 +90,17 @@ export class ClusterData implements vscode.Disposable {
         return measured ?? status;
       }),
     );
+  }
+
+  private async loadJobs(ctun: Ctun): Promise<void> {
+    this.jobs = await ctun.jobs(this.since);
+    this.changed.fire();
+  }
+
+  /** The overview has no budget use; keep the last one of the same session until the new probe answers. */
+  private withLastMeasurement(status: ClusterStatus): ClusterStatus {
+    const last = this.statuses.find((candidate) => candidate.cluster === status.cluster);
+    const sameSession = last?.session && last.session.session_id === status.session?.session_id;
+    return sameSession ? { ...status, used: last.used, used_error: last.used_error } : status;
   }
 }

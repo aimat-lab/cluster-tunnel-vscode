@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { ClusterData } from "./clusterData";
 import { CLUSTERS_VIEW_ID, ClusterNode, ClustersView } from "./clustersView";
 import { loadChanges } from "./codeChanges";
+import { CommandsPanel, CommandsPanelServices } from "./commandsPanel";
 import { Ctun } from "./ctun";
 import { JobsPanel, JobsPanelServices } from "./jobsPanel";
 import { pendingReviews } from "./jobsTable";
@@ -36,7 +37,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   clustersView.onDidChangeVisibility(({ visible }) => {
     if (visible) {
-      void data.refresh();
+      void data.refreshIfStale();
     }
   });
 
@@ -48,6 +49,17 @@ export function activate(context: vscode.ExtensionContext): void {
     loadChanges: (cluster, workdir, fromCommit, toCommit) => loadChanges(createCtun(), cluster, workdir, fromCommit, toCommit),
   };
   const showJobs = () => JobsPanel.show(context.extensionUri, services);
+  const commandsServices: CommandsPanelServices = {
+    data,
+    ctun: createCtun,
+    revealJob: (key) => showJobs().revealJob(key),
+  };
+  const showCommands = async (cluster?: string) => {
+    const picked = cluster ?? (await pickLiveCluster(data));
+    if (picked !== undefined) {
+      CommandsPanel.show(context.extensionUri, commandsServices, picked);
+    }
+  };
 
   context.subscriptions.push(
     data,
@@ -58,6 +70,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("ctun.refresh", () => data.refresh()),
     vscode.commands.registerCommand("ctun.openConfig", () => openConfig(createCtun())),
     vscode.commands.registerCommand("ctun.showJobs", showJobs),
+    vscode.commands.registerCommand("ctun.showCommands", showCommands),
     vscode.commands.registerCommand("ctun.showReviews", () => showJobs().showReviews()),
     vscode.commands.registerCommand("ctun.filterProject", (project: string) => showJobs().filterProject(project)),
     vscode.commands.registerCommand("ctun.login", (cluster: string | ClusterNode) =>
@@ -81,6 +94,19 @@ function createCtun(): Ctun {
 
 function loginMethod(): LoginMethod {
   return vscode.workspace.getConfiguration("ctun").get<LoginMethod>("login.method") ?? "window";
+}
+
+/** Asks which live cluster to show; a single one needs no asking. */
+async function pickLiveCluster(data: ClusterData): Promise<string | undefined> {
+  const live = data.statuses.filter((status) => status.live).map((status) => status.cluster);
+  if (live.length === 0) {
+    void vscode.window.showInformationMessage("No cluster is connected. Log in to one first.");
+    return undefined;
+  }
+  if (live.length === 1) {
+    return live[0];
+  }
+  return vscode.window.showQuickPick(live, { title: "Show the commands sent to which cluster?" });
 }
 
 /** The tree's login hint passes a name; its inline buttons pass the node. */

@@ -106,3 +106,21 @@ test("renders the review cards with their checked references", () => {
     { type: "showJob", key: "haicore/101" },
   ]);
 });
+
+test("scrolls once to the row another tab revealed", () => {
+  const dom = new JSDOM(`<main id="app"></main>`, { runScripts: "outside-only" });
+  Object.assign(dom.window, { acquireVsCodeApi: () => ({ postMessage: () => {} }) });
+  const scrolled: string[] = [];
+  dom.window.HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
+    scrolled.push(this.dataset.rowKey ?? "");
+  };
+  dom.window.eval(RENDERER);
+  const post = (reveal: unknown) =>
+    dom.window.dispatchEvent(
+      new dom.window.MessageEvent("message", { data: { type: "model", model: model({ expanded: ["haicore/94"] }), refreshing: false, reveal } }),
+    );
+  post({ key: "haicore/94", serial: 1 });
+  post({ key: "haicore/94", serial: 1 });
+  post({ key: "haicore/94", serial: 2 });
+  assert.deepStrictEqual(scrolled, ["haicore/94", "haicore/94"]);
+});

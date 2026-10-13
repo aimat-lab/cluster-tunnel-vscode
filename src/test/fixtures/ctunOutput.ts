@@ -1,4 +1,4 @@
-import type { ClusterStatus, Job, JobRecord, JobsReport } from "../../ctun";
+import type { ClusterStatus, CommandLog, Job, JobRecord, JobsReport } from "../../ctun";
 
 // Shaped like real `ctun status -j` / `ctun jobs --json` output.
 
@@ -98,5 +98,56 @@ export const JOBS_REPORT: JobsReport = {
       records_error: null,
     },
     { cluster: "bwuni3", live: false, error: null, jobs: [] },
+  ],
+};
+
+/** The start of the session in `COMMAND_LOG`, in epoch seconds. */
+export const COMMANDS_SESSION_START = 1791900000;
+
+function slurmJob(jobid: string, state: string, elapsed: string, start = "N/A", name = "train_htfm"): Job {
+  return { source: "done", jobid, state, elapsed, timelimit: "10:30:00", partition: "normal", nodes: "1", start, name };
+}
+
+/** One job per state the Commands tab tells apart. */
+export const COMMANDS_REPORT: JobsReport = {
+  since_minutes: 1440,
+  clusters: [
+    {
+      cluster: "haicore",
+      live: true,
+      error: null,
+      jobs: [
+        slurmJob("4817985", "COMPLETED", "0:42", "2026-10-13T16:14:41", "smoke_test"),
+        slurmJob("4817990", "FAILED", "1:05", "2026-10-13T16:15:31", "preprocess"),
+        slurmJob("4818190", "CANCELLED by 504768", "0:00"),
+        slurmJob("4818213", "RUNNING", "22:41", "2026-10-13T16:19:00"),
+        slurmJob("4818220", "PENDING", "0:00", "2026-10-13T18:30:00", "eval"),
+        slurmJob("4818221", "PENDING", "0:00", "N/A", "eval"),
+        slurmJob("4818230", "TIMEOUT", "10:30:00", "2026-10-13T05:00:00"),
+        slurmJob("4818240", "CANCELLED by 504768", "3:12", "2026-10-13T16:40:00"),
+        slurmJob("4818250_4", "CANCELLED by 504768", "0:00"),
+      ],
+    },
+  ],
+};
+
+const at = (seconds: number) => COMMANDS_SESSION_START + seconds;
+
+/** Shaped like `ctun -t haicore logs --json`; `4700000` is missing from `COMMANDS_REPORT`. */
+export const COMMAND_LOG: CommandLog = {
+  cluster: "haicore",
+  commands: [
+    { epoch: at(22), command: ["sbatch", "scripts/smoke_test.sh"], job_ids: ["4817985"] },
+    { epoch: at(44), command: ["squeue", "--me"] },
+    { epoch: at(72), command: ["sbatch", "scripts/preprocess.sh"], job_ids: ["4817990"] },
+    { epoch: at(132), command: ["sbatch", "scripts/train_htfm.sh", "--epochs", "20"], job_ids: ["4818190"] },
+    { epoch: at(164), command: ["scancel", "--signal=TERM", "4818190", "4818250_4"] },
+    { epoch: at(227), command: ["sbatch", "scripts/train_htfm.sh", "--epochs", "200"], job_ids: ["4818213"] },
+    { epoch: at(262), command: ["sbatch", "--dependency=afterok:4818213", "scripts/eval.sh"], job_ids: ["4818220", "4818221"] },
+    { epoch: at(1046), command: ["tail", "-n", "50", "runs/4818213/slurm.out"] },
+    { epoch: at(1060), command: ["sbatch", "old.sh"], job_ids: ["4700000"] },
+    { epoch: at(1065), command: ["sbatch", "scripts/long.sh"], job_ids: ["4818230"] },
+    { epoch: at(1070), command: ["scancel", "4818240"] },
+    { epoch: at(4970), command: ["bash", "-c", "echo 'it''s done' > out.txt"] },
   ],
 };

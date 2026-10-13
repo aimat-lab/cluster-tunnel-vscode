@@ -1,0 +1,103 @@
+/* Theme colors come from VS Code's --vscode-* variables, so light and dark themes both work.
+   Colour only in the state dot (and the word "Running"); the fallbacks are the scheme's values. */
+:root {
+  --running: var(--vscode-testing-iconPassed, #4cc38a);
+  --queued: var(--vscode-editorWarning-foreground, #e2b340);
+  --completed: var(--vscode-charts-blue, #6f9fd8);
+  --failed: var(--vscode-errorForeground, #f47067);
+  --cancelled: var(--vscode-disabledForeground, #6f7680);
+  --border: var(--vscode-panel-border, #2b2b2b);
+  --muted: var(--vscode-descriptionForeground, #9d9d9d);
+  --accent: var(--vscode-focusBorder, #4d9bf0);
+  --bubble: var(--vscode-textBlockQuote-background, #26292e);
+  --mono: var(--vscode-editor-font-family, monospace);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size, 13px);
+  line-height: 1.45;
+}
+
+.muted { color: var(--muted); }
+.error { margin: 12px 24px 0; color: var(--failed); }
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--vscode-editor-background);
+  font-size: 12px;
+}
+.group { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+button, select { font-family: inherit; font-size: 12px; color: inherit; cursor: pointer; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button:disabled { cursor: default; opacity: 0.6; }
+.select {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--vscode-dropdown-border, var(--border));
+  border-radius: 4px;
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+}
+.secondary {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--vscode-button-border, var(--border));
+  border-radius: 4px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+.secondary:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
+.link-button { padding: 0; border: 0; background: none; font-size: inherit; color: var(--vscode-textLink-foreground); }
+.link-button:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
+
+.transcript { padding: 18px 24px; font-family: var(--mono); font-size: var(--vscode-editor-font-size, 12.5px); }
+.header { padding-bottom: 10px; color: var(--muted); }
+
+/* One grid for the whole log, so every command starts in the same column and the bubbles line up under it. */
+.log {
+  display: grid;
+  grid-template-columns: max-content 1ch minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: baseline;
+}
+.line { display: contents; }
+.line > span { padding: 3px 0; }
+.time { color: var(--muted); }
+.prompt { color: var(--accent); }
+.command { white-space: pre-wrap; word-break: break-all; }
+.jobs { grid-column: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 2px 0 8px; }
+.bubble {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bubble);
+}
+.state { display: inline-flex; align-items: center; gap: 6px; align-self: center; color: var(--muted); }
+.dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--group-color); }
+.group-running { --group-color: var(--running); }
+.group-running .label { color: var(--running); }
+.group-queued { --group-color: var(--queued); }
+.group-completed { --group-color: var(--completed); }
+.group-failed { --group-color: var(--failed); }
+.group-cancelled { --group-color: var(--cancelled); }
+
+.gap { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 8px 0; color: var(--muted); font-size: 11px; }
+.rule { flex: 1; height: 1px; background: var(--border); }

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ClusterData } from "./clusterData";
-import { ClusterNode, ClustersView } from "./clustersView";
+import { CLUSTERS_VIEW_ID, ClusterNode, ClustersView } from "./clustersView";
 import { Ctun } from "./ctun";
 import { JobsPanel } from "./jobsPanel";
 import { logIn, logOut } from "./login";
@@ -8,7 +8,7 @@ import { createStatusBar } from "./statusBar";
 
 export function activate(context: vscode.ExtensionContext): void {
   const data = new ClusterData(createCtun);
-  const clustersView = vscode.window.createTreeView("ctun.clusters", { treeDataProvider: new ClustersView(data) });
+  const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
 
   data.onDidChange(() => {
     clustersView.message = data.error ? `ctun failed: ${data.error.message}` : undefined;

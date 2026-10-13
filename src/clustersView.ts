@@ -3,6 +3,8 @@ import type { ClusterData } from "./clusterData";
 import type { ClusterStatus } from "./ctun";
 import { summarize, textBar } from "./clusterSummary";
 
+export const CLUSTERS_VIEW_ID = "ctun.clusters";
+
 /** A cluster entry; inline menu commands receive it as their argument. */
 export interface ClusterNode {
   kind: "cluster";

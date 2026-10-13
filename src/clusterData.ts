@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { ClusterStatus, Ctun, CtunError, JobsReport } from "./ctun";
 import type { ClusterJobs } from "./clusterSummary";
+import { CLUSTERS_VIEW_ID } from "./clustersView";
 
 /**
  * The latest cluster statuses and jobs from ctun, shared by every view.
@@ -25,12 +26,16 @@ export class ClusterData implements vscode.Disposable {
 
   constructor(private readonly ctun: () => Ctun) {}
 
-  /** Refreshes from ctun; a call during a running refresh joins it. */
+  /** Refreshes from ctun under a progress bar on the Clusters view; a call during a running refresh joins it. */
   refresh(): Promise<void> {
-    this.pendingRefresh ??= this.load().finally(() => {
+    this.pendingRefresh ??= this.loadWithProgress().finally(() => {
       this.pendingRefresh = undefined;
     });
     return this.pendingRefresh;
+  }
+
+  private async loadWithProgress(): Promise<void> {
+    await vscode.window.withProgress({ location: { viewId: CLUSTERS_VIEW_ID } }, () => this.load());
   }
 
   jobsOf(cluster: string): ClusterJobs | undefined {

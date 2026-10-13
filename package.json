@@ -1,14 +1,13 @@
 {
-  "name": "ctun-vscode",
-  "displayName": "ctun — Cluster Tunnel",
+  "name": "cluster-tunnel-vscode",
+  "displayName": "Cluster Tunnel",
   "description": "Shows your HPC clusters and Slurm jobs through the ctun CLI.",
   "version": "0.0.1",
-  "publisher": "luguza",
-  "license": "MIT",
+  "publisher": "aimat-lab",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Luguza/ctun-vscode.git"
+    "url": "https://github.com/aimat-lab/cluster-tunnel-vscode.git"
   },
   "private": true,
   "engines": {

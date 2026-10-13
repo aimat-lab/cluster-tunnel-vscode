@@ -1,4 +1,4 @@
-# ctun — Cluster Tunnel for VS Code
+# Cluster Tunnel for VS Code
 
 Shows your HPC clusters and Slurm jobs in VS Code, through the
 [`ctun`](https://github.com/aimat-lab/cluster-tunnel) CLI. The extension is a thin
@@ -14,7 +14,7 @@ SSH of its own and never sees a password or one-time passcode.
 - **Status bar**: how many clusters are connected, and their budget use.
 
 Job records, agent notes, projects, code facts and W&B metrics are being built on
-the [`dev`](https://github.com/Luguza/ctun-vscode/tree/dev) branch; they need a
+the [`dev`](https://github.com/aimat-lab/cluster-tunnel-vscode/tree/dev) branch; they need a
 newer ctun.
 
 ## Requirements
@@ -28,7 +28,7 @@ newer ctun.
 The extension is not on the Marketplace yet. Install the `.vsix` file:
 
 ```bash
-code --install-extension ctun-vscode-0.0.1.vsix
+code --install-extension cluster-tunnel-vscode-0.0.1.vsix
 ```
 
 or, in VS Code: Extensions view → `…` → **Install from VSIX…**.
@@ -54,7 +54,7 @@ or, in VS Code: Extensions view → `…` → **Install from VSIX…**.
 npm install
 npm test            # compile + unit tests (fixture JSON, no cluster)
 npm run test:host   # starts a downloaded VS Code and activates the extension
-npm run package     # builds ctun-vscode-<version>.vsix
+npm run package     # builds cluster-tunnel-vscode-<version>.vsix
 ```
 
 Press F5 with this folder open to start an Extension Development Host.

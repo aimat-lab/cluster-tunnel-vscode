@@ -36,10 +36,13 @@ export const DEFAULT_FILTERS: JobsFilters = {
   project: ALL_PROJECTS,
 };
 
+/** Where an unavailable Training line points the user: the Setup view, or the guide to tagging runs. */
+export type TrainingHelp = "setup" | "tagging";
+
 /** Results the panel loads on demand for an expanded row. */
 export type TrainingState =
   | { state: "loading" }
-  | { state: "unavailable"; text: string }
+  | { state: "unavailable"; text: string; help?: TrainingHelp }
   | { state: "loaded"; text: string; url: string };
 
 export type ChangesState =

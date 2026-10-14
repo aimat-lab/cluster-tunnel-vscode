@@ -26,6 +26,8 @@ const RUN_BY_TAG = `query RunByTag($entity: String!, $project: String!, $filters
   }
 }`;
 
+const HTTP_UNAUTHORIZED = 401;
+
 const VIEWER_ENTITY = `query { viewer { entity } }`;
 
 export class WandbClient {
@@ -38,7 +40,7 @@ export class WandbClient {
 
   /** The run tagged `slurm:<jobId>`, or undefined if there is none. `entity` empty means the key's own. */
   async runForJob(entity: string, project: string, jobId: string, metricNames: readonly string[]): Promise<WandbRun | undefined> {
-    const owner = entity || (await this.viewerEntity());
+    const owner = entity || (await this.ownEntity());
     const data = (await this.query(RUN_BY_TAG, {
       entity: owner,
       project,
@@ -59,7 +61,8 @@ export class WandbClient {
     };
   }
 
-  private viewerEntity(): Promise<string> {
+  /** The entity the API key belongs to; also how a new key is checked. */
+  ownEntity(): Promise<string> {
     this.defaultEntity ??= this.query(VIEWER_ENTITY, {}).then((data) => (data as { viewer: { entity: string } }).viewer.entity);
     return this.defaultEntity;
   }
@@ -73,6 +76,9 @@ export class WandbClient {
       },
       body: JSON.stringify({ query, variables }),
     });
+    if (response.status === HTTP_UNAUTHORIZED) {
+      throw new Error("W&B rejected the API key");
+    }
     if (!response.ok) {
       throw new Error(`W&B answered HTTP ${response.status}`);
     }

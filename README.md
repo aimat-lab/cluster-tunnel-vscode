@@ -13,13 +13,20 @@ straight to ctun's stdin.
   ctun's own login window (`ctun.login.method`); log out closes the tunnel.
   `ctun login -i` run by an agent or in a terminal of the window asks there too.
   Below it, **Projects** lists the jobs per `--project`; a click filters the table.
+- **Setup view** (below Projects): whether ctun is found, how many clusters its
+  config has, the login method, and the W&B key, project and entity. Green is
+  fine, amber needs fixing, grey is an optional feature that is off. A click
+  opens the setting or runs the command that fixes the row.
 - **Cluster jobs** tab: one list of the jobs on every connected cluster, grouped by
   project and filtered by state (Running, Queued, Completed, Failed, Cancelled), by
   an "Ended in" window (24 h, 7 d, 30 d), by cluster and by project. It refreshes
   every 60 s while it is visible. **Details** on a row shows:
   - the agent's **note**, an unreviewed draft until you confirm, edit or discard it;
   - **Training**: epoch and metrics of the job's W&B run (found by its
-    `slurm:<job id>` tag) and a link to it;
+    `slurm:<job id>` tag) and a link to it. When W&B is not set up or no run
+    has the tag, the line links to the Setup view or to the guide
+    ([docs/wandb-tagging.md](docs/wandb-tagging.md), also **ctun: How to Tag W&B
+    Runs**);
   - **Code**: the commit at submit time, whether it was pushed, uncommitted files;
   - **From**: the machine and time of the submission;
   - **Changes**: the previous run of the same project and job name, and the
@@ -78,7 +85,8 @@ The W&B API key goes in VS Code's SecretStorage: run **ctun: Set W&B API Key**.
 | ctun: Show Cluster Jobs | Clusters view title, the "Jobs" row |
 | ctun: Show Commands Sent | the "Commands" row, Command Palette |
 | ctun: Review Agent Notes | status bar, "To review" button |
-| ctun: Set / Remove W&B API Key | Command Palette |
+| ctun: Set / Remove W&B API Key | Setup view, Command Palette |
+| ctun: How to Tag W&B Runs | Setup view, a job's Training line, Command Palette |
 | ctun: Refresh | Clusters view title |
 | ctun: Open ctun Config | Clusters view title |
 | Log in / Log out | the icon on a cluster's row |

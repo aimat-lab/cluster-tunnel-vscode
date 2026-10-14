@@ -42,6 +42,10 @@
         {
           "id": "ctun.projects",
           "name": "Projects"
+        },
+        {
+          "id": "ctun.setup",
+          "name": "Setup"
         }
       ]
     },
@@ -89,6 +93,11 @@
       {
         "command": "ctun.clearWandbKey",
         "title": "Remove W&B API Key",
+        "category": "ctun"
+      },
+      {
+        "command": "ctun.showWandbGuide",
+        "title": "How to Tag W&B Runs",
         "category": "ctun"
       },
       {

@@ -9,3 +9,4 @@ tsconfig.json
 PUBLISHING.md
 .github/**
 .gitattributes
+docs/plans/**

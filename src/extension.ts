@@ -10,8 +10,9 @@ import { LoginMethod, logIn, logOut } from "./login";
 import { BRIDGE_VARIABLE, LoginAnswer, startLoginBridge } from "./loginBridge";
 import { ProjectsView } from "./projectsView";
 import { REVIEWS_STATE_KEY, ReviewStore } from "./reviews";
+import { SETUP_VIEW_ID, SetupView } from "./setupView";
 import { createStatusBar } from "./statusBar";
-import { setWandbKey, trainingLookup, WANDB_KEY_SECRET } from "./training";
+import { setWandbKey, showWandbGuide, trainingLookup, WANDB_KEY_SECRET } from "./training";
 
 export function activate(context: vscode.ExtensionContext): void {
   const data = new ClusterData(createCtun);
@@ -23,6 +24,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
   const projectsView = vscode.window.createTreeView("ctun.projects", { treeDataProvider: new ProjectsView(data) });
+  const setupView = vscode.window.createTreeView(SETUP_VIEW_ID, { treeDataProvider: new SetupView(data, context.secrets) });
   const updateBadge = () => {
     const pending = pendingCount();
     clustersView.badge = pending > 0 ? { value: pending, tooltip: `${pending} agent notes to review` } : undefined;
@@ -66,6 +68,7 @@ export function activate(context: vscode.ExtensionContext): void {
     data,
     clustersView,
     projectsView,
+    setupView,
     reviewsChanged,
     createStatusBar(data, pendingCount, reviewsChanged.event),
     vscode.commands.registerCommand("ctun.refresh", () => data.refresh()),
@@ -82,6 +85,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand("ctun.setWandbKey", () => setWandbKey(context.secrets)),
     vscode.commands.registerCommand("ctun.clearWandbKey", () => context.secrets.delete(WANDB_KEY_SECRET)),
+    vscode.commands.registerCommand("ctun.showWandbGuide", () => showWandbGuide(context.extensionUri)),
   );
   void announceLoginBridge(context, (request) =>
     loginMethod() === "vscode"

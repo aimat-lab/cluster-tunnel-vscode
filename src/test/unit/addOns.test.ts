@@ -96,3 +96,13 @@ test("a failing git log becomes an error state", async () => {
   const changes = await loadChanges(fakeCtun("exit:128"), "haicore", "/work/repo", "a", "b");
   assert.strictEqual(changes.state, "error");
 });
+
+test("a key W&B rejects fails with a plain message", async () => {
+  const fetchFn: FetchLike = async () => ({ ok: false, status: 401, json: async () => ({}) });
+  await assert.rejects(new WandbClient("wrong", fetchFn).ownEntity(), /W&B rejected the API key/);
+});
+
+test("a key W&B accepts names its entity", async () => {
+  const { fetchFn } = fakeWandb([], "luca");
+  assert.strictEqual(await new WandbClient("right", fetchFn).ownEntity(), "luca");
+});

@@ -11,10 +11,12 @@ import {
   JobsFilters,
   JobsTableModel,
   RowExtras,
+  TrainingHelp,
   TrainingState,
 } from "./jobsTable";
 import { StateGroupId, stateGroup } from "./jobStates";
 import type { ReviewStatus, ReviewStore } from "./reviews";
+import { SETUP_VIEW_ID } from "./setupView";
 
 /** Each refresh runs `sacct` on a login node, so not more often than this. */
 const AUTO_REFRESH_MS = 60_000;
@@ -43,7 +45,13 @@ type WebviewMessage =
   | { type: "review"; reviewKey: string; action: "confirm" | "edit" | "discard" }
   | { type: "loadChanges"; key: string }
   | { type: "showJob"; key: string }
-  | { type: "openUrl"; url: string };
+  | { type: "openUrl"; url: string }
+  | { type: "trainingHelp"; help: TrainingHelp };
+
+const TRAINING_HELP_COMMANDS: Record<TrainingHelp, string> = {
+  setup: `${SETUP_VIEW_ID}.focus`,
+  tagging: "ctun.showWandbGuide",
+};
 
 /** The "Cluster jobs" editor tab: one list of every live cluster's jobs. */
 export class JobsPanel {
@@ -164,6 +172,9 @@ export class JobsPanel {
         if (message.url.startsWith("https://wandb.ai/")) {
           void vscode.env.openExternal(vscode.Uri.parse(message.url));
         }
+        return;
+      case "trainingHelp":
+        void vscode.commands.executeCommand(TRAINING_HELP_COMMANDS[message.help]);
         return;
     }
   }

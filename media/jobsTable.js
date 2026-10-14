@@ -198,9 +198,15 @@
     return box;
   }
 
+  const TRAINING_HELP_LABELS = { setup: "Set up W&B", tagging: "How to tag runs" };
+
   function trainingDetail(training) {
     if (!training || training.state === "loading") return el("span", "muted", "Looking up the W&B run…");
-    if (training.state === "unavailable") return el("span", "muted", training.text);
+    if (training.state === "unavailable") {
+      const line = el("span", "muted", training.text);
+      if (training.help) line.append(" ", button("link-button", TRAINING_HELP_LABELS[training.help], { type: "trainingHelp", help: training.help }));
+      return line;
+    }
     const line = el("span", "");
     line.append(el("span", "mono small", training.text), " ");
     line.append(button("link-button", "W&B ↗", { type: "openUrl", url: training.url }));

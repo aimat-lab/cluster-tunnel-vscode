@@ -85,6 +85,21 @@ test("renders the details of an expanded job and sends its actions", () => {
   ]);
 });
 
+test("links an unavailable Training line to its help", () => {
+  const extras = new Map<string, RowExtras>([
+    ["haicore/101", { training: { state: "unavailable", text: "W&B not configured.", help: "setup" } }],
+    ["haicore/103", { training: { state: "unavailable", text: "No W&B run tagged slurm:103.", help: "tagging" } }],
+  ]);
+  const { app, sent, click } = render(model({ expanded: ["haicore/101", "haicore/103"], extras }));
+  const details = [...app.querySelectorAll(".details-row")];
+  click("Set up W&B", details[0]);
+  click("How to tag runs", details[1]);
+  assert.deepStrictEqual(sent.slice(-2), [
+    { type: "trainingHelp", help: "setup" },
+    { type: "trainingHelp", help: "tagging" },
+  ]);
+});
+
 test("offers to load the commit list before it is loaded", () => {
   const { sent, click } = render(model({ expanded: ["haicore/101"] }));
   click("Show commits since job 91");

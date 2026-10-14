@@ -185,15 +185,10 @@
           ],
           "markdownDescription": "How **Log in** asks for the session budget, password and OTP. Also applies to `ctun login -i` run by agents and terminals of this window."
         },
-        "ctun.wandb.project": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "W&B project whose runs carry the `slurm:<job id>` tag, e.g. `htfm_multihead`. Empty turns the Training line off."
-        },
         "ctun.wandb.entity": {
           "type": "string",
           "default": "",
-          "markdownDescription": "W&B entity (user or team) of that project. Empty means the API key's own entity."
+          "markdownDescription": "W&B entity (user or team) whose projects hold the runs tagged `slurm:<job id>`. Empty means the API key's own entity."
         },
         "ctun.wandb.metrics": {
           "type": "array",

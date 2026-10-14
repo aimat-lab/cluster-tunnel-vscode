@@ -8,7 +8,7 @@ const WORKING: SetupInputs = {
   ctunError: undefined,
   clusterCount: 2,
   loginMethod: "vscode",
-  wandb: { hasKey: true, project: "htfm_multihead", entity: "" },
+  wandb: { hasKey: true, entity: "" },
 };
 
 /** Each row as `label: health description`, children indented. */
@@ -24,9 +24,8 @@ test("a working setup is all ok", () => {
     "ctun: ok ctun",
     "Clusters: ok 2 configured",
     "Login: plain VS Code input boxes",
-    "W&B: ok htfm_multihead",
+    "W&B: ok the key's own entity",
     "  API key: ok stored",
-    "  Project: ok htfm_multihead",
     "  Entity: plain the key's own",
     "  Tag runs in the training script: plain how to",
   ]);
@@ -41,16 +40,11 @@ test("an empty ctun config is broken", () => {
   assert.strictEqual(summary({ ...WORKING, clusterCount: 0 })[1], "Clusters: broken none in the ctun config");
 });
 
-test("W&B without key and project is off, not broken", () => {
-  const rows = summary({ ...WORKING, wandb: { hasKey: false, project: "", entity: "" } });
-  assert.deepStrictEqual(rows.slice(3, 6), [
-    "W&B: off off; set a key and project to show runs",
-    "  API key: off missing",
-    "  Project: off not set",
-  ]);
+test("W&B without a key is off, not broken", () => {
+  const rows = summary({ ...WORKING, wandb: { hasKey: false, entity: "" } });
+  assert.deepStrictEqual(rows.slice(3, 5), ["W&B: off off; set a key to show projects and runs", "  API key: off missing"]);
 });
 
-test("W&B with only one of key and project is broken", () => {
-  const rows = summary({ ...WORKING, wandb: { hasKey: true, project: "", entity: "" } });
-  assert.deepStrictEqual(rows.slice(3, 6), ["W&B: broken project missing", "  API key: ok stored", "  Project: broken not set"]);
+test("W&B with a team entity names it", () => {
+  assert.strictEqual(summary({ ...WORKING, wandb: { hasKey: true, entity: "aimat" } })[3], "W&B: ok aimat");
 });

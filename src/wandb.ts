@@ -1,4 +1,4 @@
-/** Finds a job's W&B run by its `slurm:<job id>` tag (D11) through the W&B GraphQL API. */
+/** Finds a job's W&B run and project by its `slurm:<job id>` tag (D11) through the W&B GraphQL API. */
 
 const GRAPHQL_URL = "https://api.wandb.ai/graphql";
 
@@ -26,6 +26,15 @@ const RUN_BY_TAG = `query RunByTag($entity: String!, $project: String!, $filters
   }
 }`;
 
+/** More projects than this in one entity are not searched. */
+const MAX_PROJECTS = 100;
+
+const ENTITY_PROJECTS = `query EntityProjects($entity: String!) {
+  entity(name: $entity) {
+    projects(first: ${MAX_PROJECTS}) { edges { node { name } } }
+  }
+}`;
+
 const HTTP_UNAUTHORIZED = 401;
 
 const VIEWER_ENTITY = `query { viewer { entity } }`;
@@ -44,7 +53,7 @@ export class WandbClient {
     const data = (await this.query(RUN_BY_TAG, {
       entity: owner,
       project,
-      filters: JSON.stringify({ tags: { $in: [`slurm:${jobId}`] } }),
+      filters: JSON.stringify({ tags: { $in: [slurmTag(jobId)] } }),
     })) as { project: { runs: { edges: { node: RunNode }[] } } | null };
     const node = data.project?.runs.edges[0]?.node;
     if (!node) {
@@ -59,6 +68,47 @@ export class WandbClient {
       epoch: typeof summary.epoch === "number" ? summary.epoch : undefined,
       metrics: metricNames.flatMap((name) => (typeof summary[name] === "number" ? [{ name, value: summary[name] as number }] : [])),
     };
+  }
+
+  /**
+   * The project of each job whose run in `entity` is tagged `slurm:<job id>`; jobs without one are left out.
+   * Two requests: the entity's projects, then every project's tagged runs at once.
+   */
+  async projectsOfJobs(entity: string, jobIds: readonly string[]): Promise<Map<string, string>> {
+    const projectOfJob = new Map<string, string>();
+    if (jobIds.length === 0) {
+      return projectOfJob;
+    }
+    const owner = entity || (await this.ownEntity());
+    const projects = await this.projectNames(owner);
+    if (projects.length === 0) {
+      return projectOfJob;
+    }
+    const projectVariables = Object.fromEntries(projects.map((name, index) => [`project${index}`, name]));
+    const data = (await this.query(taggedRunsQuery(projects.length), {
+      entity: owner,
+      filters: JSON.stringify({ tags: { $in: jobIds.map(slurmTag) } }),
+      first: jobIds.length,
+      ...projectVariables,
+    })) as Record<string, { runs: { edges: { node: { tags: string[] | null } }[] } } | null>;
+    const wanted = new Set(jobIds);
+    projects.forEach((project, index) => {
+      for (const { node } of data[`project${index}`]?.runs.edges ?? []) {
+        for (const jobId of (node.tags ?? []).flatMap(jobIdOfTag)) {
+          if (wanted.has(jobId) && !projectOfJob.has(jobId)) {
+            projectOfJob.set(jobId, project);
+          }
+        }
+      }
+    });
+    return projectOfJob;
+  }
+
+  private async projectNames(entity: string): Promise<string[]> {
+    const data = (await this.query(ENTITY_PROJECTS, { entity })) as {
+      entity: { projects: { edges: { node: { name: string } }[] } } | null;
+    };
+    return (data.entity?.projects.edges ?? []).map(({ node }) => node.name);
   }
 
   /** The entity the API key belongs to; also how a new key is checked. */
@@ -95,6 +145,32 @@ interface RunNode {
   displayName: string;
   state: string;
   summaryMetrics: string | null;
+}
+
+const SLURM_TAG_PREFIX = "slurm:";
+
+function slurmTag(jobId: string): string {
+  return `${SLURM_TAG_PREFIX}${jobId}`;
+}
+
+/** `slurm:4821937` → `["4821937"]`; any other tag → `[]`. */
+function jobIdOfTag(tag: string): string[] {
+  return tag.startsWith(SLURM_TAG_PREFIX) ? [tag.slice(SLURM_TAG_PREFIX.length)] : [];
+}
+
+/** One `runs` lookup per project, aliased `project0`, `project1`, …, so one request covers them all. */
+function taggedRunsQuery(projectCount: number): string {
+  const indexes = [...Array(projectCount).keys()];
+  const projectVariables = indexes.map((index) => `$project${index}: String!`).join(", ");
+  const projectFields = indexes.map(
+    (index) =>
+      `  project${index}: project(name: $project${index}, entityName: $entity) {
+    runs(filters: $filters, first: $first) { edges { node { tags } } }
+  }`,
+  );
+  return `query TaggedRuns($entity: String!, $filters: JSONString, $first: Int, ${projectVariables}) {
+${projectFields.join("\n")}
+}`;
 }
 
 function parseSummary(summaryMetrics: string | null): Record<string, unknown> {

@@ -5,14 +5,20 @@ import { trainingSummary, WandbClient } from "./wandb";
 /** The SecretStorage key of the W&B API key. */
 export const WANDB_KEY_SECRET = "ctun.wandb.apiKey";
 
-/** Looks up a job's W&B run with the key in SecretStorage and the `ctun.wandb.*` settings. */
-export function trainingLookup(secrets: vscode.SecretStorage): (jobId: string) => Promise<TrainingState> {
+/** Looks up a job's W&B run in its project, with the key in SecretStorage and the `ctun.wandb.*` settings. */
+export function trainingLookup(
+  secrets: vscode.SecretStorage,
+  projectOf: (jobId: string) => Promise<string | undefined>,
+): (jobId: string) => Promise<TrainingState> {
   return async (jobId) => {
     const settings = vscode.workspace.getConfiguration("ctun.wandb");
-    const project = settings.get<string>("project") ?? "";
     const apiKey = await secrets.get(WANDB_KEY_SECRET);
-    if (!apiKey || !project) {
+    if (!apiKey) {
       return { state: "unavailable", text: "W&B not configured.", help: "setup" };
+    }
+    const project = await projectOf(jobId);
+    if (!project) {
+      return { state: "unavailable", text: `No W&B run tagged slurm:${jobId}.`, help: "tagging" };
     }
     const entity = settings.get<string>("entity") ?? "";
     const metrics = settings.get<string[]>("metrics") ?? [];

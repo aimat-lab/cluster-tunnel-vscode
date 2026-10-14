@@ -16,6 +16,7 @@ import {
 } from "../../jobsTable";
 import type { Review } from "../../reviews";
 import { GUARDED_STATUS, JOBS, JOBS_REPORT, LOGGED_OUT_STATUS } from "../fixtures/ctunOutput";
+import { JOB_PROJECTS } from "../fixtures/wandbProjects";
 
 const STATUSES = [LOGGED_OUT_STATUS, GUARDED_STATUS];
 
@@ -24,6 +25,7 @@ function table(overrides: Partial<Omit<TableInputs, "filters">> & { filters?: Pa
   return buildJobsTable({
     statuses: STATUSES,
     report: JOBS_REPORT,
+    projects: JOB_PROJECTS,
     loggingIn: new Set(),
     updatedAt: undefined,
     reviews: {},
@@ -70,6 +72,20 @@ test("groups rows by project with Unassigned last", () => {
     model.projects.map((project) => [project.label, project.count]),
     [["All projects", 8], ["htfm", 3], ["legacy", 1], ["Unassigned", 4]],
   );
+});
+
+test("a job's project is its W&B run's, not the one its record names", () => {
+  const projects = { byJob: new Map([["90", "htfm"], ["101", "htfm"]]), error: undefined };
+  const model = table({ projects });
+  assert.deepStrictEqual(
+    model.groups.map((group) => [group.label, group.rows.map((row) => row.id)]),
+    [["htfm", ["101", "90"]], ["Unassigned", ["102", "103", "91", "92", "93", "94"]]],
+  );
+});
+
+test("a failed W&B lookup shows as an error", () => {
+  const model = table({ projects: { ...JOB_PROJECTS, error: "W&B rejected the API key" } });
+  assert.deepStrictEqual(model.errors, [{ cluster: "W&B", message: "projects: W&B rejected the API key" }]);
 });
 
 test("the project filter combines with the state toggles and the cluster chip", () => {
@@ -130,12 +146,12 @@ test("a note is an unreviewed draft until reviewed; an edit replaces its text", 
 });
 
 test("pending reviews include records without a listed job and skip reviewed ones", () => {
-  const all = pendingReviews(JOBS_REPORT, {});
+  const all = pendingReviews(JOBS_REPORT, {}, JOB_PROJECTS);
   assert.deepStrictEqual(all.map((card) => card.id), ["102", "101", "80"]);
   assert.deepStrictEqual(all.find((card) => card.id === "101")!.references, ["job:91", "commit:87d86d4"]);
   assert.strictEqual(all.find((card) => card.id === "80")!.stateLabel, "Not listed");
 
-  const afterConfirm = pendingReviews(JOBS_REPORT, { "haic/102": { status: "confirmed", at: "x" } });
+  const afterConfirm = pendingReviews(JOBS_REPORT, { "haic/102": { status: "confirmed", at: "x" } }, JOB_PROJECTS);
   assert.deepStrictEqual(afterConfirm.map((card) => card.id), ["101", "80"]);
   assert.strictEqual(table().pendingCount, 3);
 });

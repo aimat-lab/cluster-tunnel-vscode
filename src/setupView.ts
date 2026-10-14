@@ -40,7 +40,6 @@ export class SetupView implements vscode.TreeDataProvider<SetupCheck> {
       loginMethod: settings.get<LoginMethod>("login.method") ?? "vscode",
       wandb: {
         hasKey: (await this.secrets.get(WANDB_KEY_SECRET)) !== undefined,
-        project: settings.get<string>("wandb.project") ?? "",
         entity: settings.get<string>("wandb.entity") ?? "",
       },
     });

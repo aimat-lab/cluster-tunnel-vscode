@@ -13,17 +13,19 @@ import { REVIEWS_STATE_KEY, ReviewStore } from "./reviews";
 import { SETUP_VIEW_ID, SetupView } from "./setupView";
 import { createStatusBar } from "./statusBar";
 import { setWandbKey, showWandbGuide, trainingLookup, WANDB_KEY_SECRET } from "./training";
+import { WandbProjects } from "./wandbProjects";
 
 export function activate(context: vscode.ExtensionContext): void {
   const data = new ClusterData(createCtun);
+  const projects = new WandbProjects(data, context.secrets);
   const reviews = new ReviewStore(context.globalState);
   // D8: reviews live in globalState, which Settings Sync carries to the user's other machines.
   context.globalState.setKeysForSync([REVIEWS_STATE_KEY]);
   const reviewsChanged = new vscode.EventEmitter<void>();
-  const pendingCount = () => pendingReviews(data.jobs, reviews.all()).length;
+  const pendingCount = () => pendingReviews(data.jobs, reviews.all(), projects).length;
 
   const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
-  const projectsView = vscode.window.createTreeView("ctun.projects", { treeDataProvider: new ProjectsView(data) });
+  const projectsView = vscode.window.createTreeView("ctun.projects", { treeDataProvider: new ProjectsView(data, projects) });
   const setupView = vscode.window.createTreeView(SETUP_VIEW_ID, { treeDataProvider: new SetupView(data, context.secrets) });
   const updateBadge = () => {
     const pending = pendingCount();
@@ -46,9 +48,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const services: JobsPanelServices = {
     data,
+    projects,
     reviews,
     onReviewsChanged: () => reviewsChanged.fire(),
-    loadTraining: trainingLookup(context.secrets),
+    loadTraining: trainingLookup(context.secrets, (jobId) => projects.projectOf(jobId)),
     loadChanges: (cluster, workdir, fromCommit, toCommit) => loadChanges(createCtun(), cluster, workdir, fromCommit, toCommit),
   };
   const showJobs = () => JobsPanel.show(context.extensionUri, services);
@@ -66,6 +69,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     data,
+    projects,
     clustersView,
     projectsView,
     setupView,

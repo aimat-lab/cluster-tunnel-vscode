@@ -1,8 +1,10 @@
 # Tag W&B runs with their Slurm job
 
 The Cluster jobs tab shows a job's W&B run: the epoch, the metrics from
-`ctun.wandb.metrics` and a link to the run. To find the run, it looks for the
-W&B tag `slurm:<job id>`. Your training script must add that tag. The extension
+`ctun.wandb.metrics` and a link to the run. The job's project is the W&B
+project of that run. To find the run, the extension looks for the W&B tag
+`slurm:<job id>` in every project of the entity. Your training script must add
+that tag. The extension
 cannot read the script, so it cannot check this for you.
 
 ## 1. Add the tag after the run starts
@@ -53,8 +55,24 @@ In the **Setup** view of the ctun sidebar:
   **New key**, name it, and copy it. W&B shows the full key only once. The
   extension checks the key with W&B, then VS Code keeps it in its
   SecretStorage, never in the settings.
-- **Project**: set `ctun.wandb.project` to the project the script logs to.
-- **Entity**: set `ctun.wandb.entity` only if the project belongs to a team or
+- **Entity**: set `ctun.wandb.entity` only if the projects belong to a team or
   another user. Empty means the API key's own entity.
 
 Then collapse and expand a job in the Cluster jobs tab to look up its run again.
+
+## 4. Tag a job afterwards
+
+A job whose run has no tag shows as Unassigned. To move it into its project,
+add the tag `slurm:<job id>` to the run in W&B: open the run, and add the tag
+under **Overview** → **Tags**. With the W&B Python API:
+
+```python
+import wandb
+
+run = wandb.Api().run("<entity>/<project>/<run id>")
+run.tags = [*run.tags, "slurm:4821937"]
+run.update()
+```
+
+The job moves into the run's project at the next refresh of the Cluster jobs
+tab.

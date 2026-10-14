@@ -25,7 +25,7 @@ export interface SetupInputs {
   ctunError: { kind: CtunErrorKind; message: string } | undefined;
   clusterCount: number;
   loginMethod: LoginMethod;
-  wandb: { hasKey: boolean; project: string; entity: string };
+  wandb: { hasKey: boolean; entity: string };
 }
 
 const LOGIN_METHOD_LABELS: Record<LoginMethod, string> = {
@@ -73,21 +73,13 @@ function loginMethodCheck({ loginMethod }: SetupInputs): SetupCheck {
   };
 }
 
-function wandbCheck({ hasKey, project, entity }: SetupInputs["wandb"]): SetupCheck {
-  const isHalfSetUp = hasKey !== Boolean(project);
-  const missing: SetupHealth = isHalfSetUp ? "broken" : "off";
+function wandbCheck({ hasKey, entity }: SetupInputs["wandb"]): SetupCheck {
   const children: SetupCheck[] = [
     {
       label: "API key",
-      health: hasKey ? "ok" : missing,
+      health: hasKey ? "ok" : "off",
       description: hasKey ? "stored" : "missing",
       fix: { kind: "command", command: "ctun.setWandbKey" },
-    },
-    {
-      label: "Project",
-      health: project ? "ok" : missing,
-      description: project || "not set",
-      fix: { kind: "setting", id: "ctun.wandb.project" },
     },
     {
       label: "Entity",
@@ -104,11 +96,8 @@ function wandbCheck({ hasKey, project, entity }: SetupInputs["wandb"]): SetupChe
       fix: { kind: "command", command: "ctun.showWandbGuide" },
     },
   ];
-  if (hasKey && project) {
-    return { label: "W&B", health: "ok", description: project, children };
+  if (hasKey) {
+    return { label: "W&B", health: "ok", description: entity || "the key's own entity", children };
   }
-  if (isHalfSetUp) {
-    return { label: "W&B", health: "broken", description: hasKey ? "project missing" : "API key missing", children };
-  }
-  return { label: "W&B", health: "off", description: "off; set a key and project to show runs", children };
+  return { label: "W&B", health: "off", description: "off; set a key to show projects and runs", children };
 }

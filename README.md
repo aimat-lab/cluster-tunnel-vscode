@@ -12,9 +12,12 @@ straight to ctun's stdin.
   Log in asks for the budget, OTP and password in VS Code input boxes, or opens
   ctun's own login window (`ctun.login.method`); log out closes the tunnel.
   `ctun login -i` run by an agent or in a terminal of the window asks there too.
-  Below it, **Projects** lists the jobs per `--project`; a click filters the table.
+  Below it, **Projects** lists the jobs per W&B project; a click filters the table.
+  A job's project is the W&B project of the run tagged `slurm:<job id>`, so a tag
+  added later in W&B moves an old job into its project at the next refresh.
+  Jobs without a tagged run are Unassigned.
 - **Setup view** (below Projects): whether ctun is found, how many clusters its
-  config has, the login method, and the W&B key, project and entity. Green is
+  config has, the login method, and the W&B key and entity. Green is
   fine, amber needs fixing, grey is an optional feature that is off. A click
   opens the setting or runs the command that fixes the row.
 - **Cluster jobs** tab: one list of the jobs on every connected cluster, grouped by
@@ -43,13 +46,13 @@ straight to ctun's stdin.
   bar badge and the status bar show how many wait.
 - **Status bar**: connected clusters, notes to review, and budget use.
 
-Notes, projects and code facts come from the job records that `ctun run` writes
+Notes and code facts come from the job records that `ctun run` writes
 on the cluster (ctun with job records; see its `reference.md`). Jobs submitted
 without them show only the Slurm columns.
 
 ## Requirements
 
-- `ctun` with job records (newer than 0.5.0) for notes, projects and code facts, and
+- `ctun` with job records (newer than 0.5.0) for notes and code facts, and
   for the jobs under each command in the Commands tab; 0.5.0 shows the Slurm columns
   and the bare commands only. Configured (`ctun config --init`), on `PATH` or set in
   `ctun.path`. On Windows, ctun runs ssh inside WSL 2; see ctun's README.
@@ -72,8 +75,7 @@ or, in VS Code: Extensions view → `…` → **Install from VSIX…**.
 |---|---|---|
 | `ctun.path` | `ctun` | The `ctun` executable. Use an absolute path if VS Code does not find it on `PATH`, e.g. `C:\Users\<you>\.local\bin\ctun.exe`. |
 | `ctun.login.method` | `vscode` | `vscode`: VS Code input boxes for budget, OTP and password; the secrets reach ctun on stdin only (`ctun login --credentials-stdin`). `window`: ctun's login window. Applies to **Log in** and to `ctun login -i` from agents and terminals of the window. |
-| `ctun.wandb.project` | empty | W&B project of the runs, e.g. `htfm_multihead`. Empty turns the Training line off. |
-| `ctun.wandb.entity` | empty | W&B user or team; empty means the API key's own. |
+| `ctun.wandb.entity` | empty | W&B user or team whose projects are searched for tagged runs; empty means the API key's own. Only its first 100 projects are searched. |
 | `ctun.wandb.metrics` | `val/loss`, `val/mae_T_trans` | Summary metrics shown per run. |
 
 The W&B API key goes in VS Code's SecretStorage: run **ctun: Set W&B API Key**.

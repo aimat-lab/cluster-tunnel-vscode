@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { buildJobsTable, DEFAULT_FILTERS, JobsTableModel, RowExtras } from "../../jobsTable";
 import { GUARDED_STATUS, JOBS_REPORT, LOGGED_OUT_STATUS } from "../fixtures/ctunOutput";
+import { JOB_PROJECTS } from "../fixtures/wandbProjects";
 
 const RENDERER = fs.readFileSync(path.resolve(__dirname, "../../../media/jobsTable.js"), "utf8");
 
@@ -30,6 +31,7 @@ function model(overrides: { mode?: "jobs" | "review"; expanded?: string[]; extra
   return buildJobsTable({
     statuses: [GUARDED_STATUS, LOGGED_OUT_STATUS],
     report: JOBS_REPORT,
+    projects: JOB_PROJECTS,
     loggingIn: new Set(),
     filters: DEFAULT_FILTERS,
     updatedAt: undefined,
@@ -44,7 +46,7 @@ test("renders project groups, notes and the locked cluster", () => {
   const { app } = render(model());
   const text = app.textContent ?? "";
   assert.match(text, /htfm 3 shown/);
-  assert.match(text, /Unassigned submitted without --project/);
+  assert.match(text, /Unassigned no W&B run tagged with the job/);
   assert.match(text, /unreviewed Rerun of job:91/);
   assert.match(text, /bwuni3 has no tunnel/);
   assert.match(text, /To review · 3/);

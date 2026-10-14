@@ -69,6 +69,29 @@ test("finds a job's W&B run by its slurm tag and reads the chosen metrics", asyn
   assert.strictEqual(runQuery.authorization, `Basic ${Buffer.from("api:key123").toString("base64")}`);
 });
 
+test("finds each job's W&B project with one request over every project", async () => {
+  const requests: { query: string; variables: Record<string, unknown> }[] = [];
+  const fetchFn: FetchLike = async (_url, init) => {
+    const { query, variables } = JSON.parse(init.body);
+    requests.push({ query, variables });
+    const data = query.includes("EntityProjects")
+      ? { entity: { projects: { edges: [{ node: { name: "htfm_multihead" } }, { node: { name: "sweeps" } }] } } }
+      : {
+          project0: { runs: { edges: [{ node: { tags: ["slurm:101", "slurm:91", "baseline"] } }] } },
+          project1: { runs: { edges: [{ node: { tags: ["slurm:103", "slurm:7"] } }] } },
+        };
+    return { ok: true, status: 200, json: async () => ({ data }) };
+  };
+  const projects = await new WandbClient("k", fetchFn).projectsOfJobs("team", ["101", "103", "90"]);
+  assert.deepStrictEqual([...projects], [["101", "htfm_multihead"], ["103", "sweeps"]]);
+
+  const runsQuery = requests[1];
+  assert.strictEqual(requests.length, 2);
+  assert.match(runsQuery.query, /project1: project\(name: \$project1, entityName: \$entity\)/);
+  assert.deepStrictEqual(JSON.parse(runsQuery.variables.filters as string), { tags: { $in: ["slurm:101", "slurm:103", "slurm:90"] } });
+  assert.deepStrictEqual([runsQuery.variables.project0, runsQuery.variables.project1], ["htfm_multihead", "sweeps"]);
+});
+
 test("a job without a tagged run has no W&B run", async () => {
   const { fetchFn } = fakeWandb([]);
   assert.strictEqual(await new WandbClient("k", fetchFn).runForJob("team", "p", "1", []), undefined);

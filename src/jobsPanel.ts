@@ -16,6 +16,7 @@ import {
 } from "./jobsTable";
 import { StateGroupId, stateGroup } from "./jobStates";
 import type { ReviewStatus, ReviewStore } from "./reviews";
+import type { WandbProjects } from "./wandbProjects";
 import { SETUP_VIEW_ID } from "./setupView";
 
 /** Each refresh runs `sacct` on a login node, so not more often than this. */
@@ -24,6 +25,7 @@ const AUTO_REFRESH_MS = 60_000;
 /** What the panel needs from the rest of the extension. */
 export interface JobsPanelServices {
   data: ClusterData;
+  projects: WandbProjects;
   reviews: ReviewStore;
   /** Called after a review changed, so the badge and status bar follow. */
   onReviewsChanged: () => void;
@@ -98,6 +100,7 @@ export class JobsPanel {
       panel.onDidChangeViewState(() => this.followVisibility()),
       panel.onDidDispose(() => this.dispose()),
       services.data.onDidChange(() => this.post()),
+      services.projects.onDidChange(() => this.post()),
     );
     services.data.since = effectiveSince(this.filters);
     this.followVisibility();
@@ -280,6 +283,7 @@ export class JobsPanel {
     return buildJobsTable({
       statuses,
       report: jobs,
+      projects: this.services.projects,
       loggingIn,
       filters: this.filters,
       updatedAt,

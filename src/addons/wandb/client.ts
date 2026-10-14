@@ -14,6 +14,8 @@ export interface TaggedRun {
   displayName: string;
   state: string;
   tags: string[];
+  /** The run's group (`wandb.init(group=…)`); null without one. */
+  group: string | null;
   url: string;
   /** The run's summary metrics; empty unless asked for. */
   summary: Record<string, unknown>;
@@ -67,6 +69,7 @@ export class WandbClient {
         displayName: node.displayName,
         state: node.state,
         tags: node.tags ?? [],
+        group: node.group || null,
         url: `https://wandb.ai/${encodeURIComponent(owner)}/${encodeURIComponent(project)}/runs/${encodeURIComponent(node.name)}`,
         summary: parseSummary(node.summaryMetrics),
       })),
@@ -114,13 +117,14 @@ interface RunNode {
   displayName: string;
   state: string;
   tags: string[] | null;
+  group: string | null;
   summaryMetrics?: string | null;
 }
 
 /** One `runs` lookup per project, aliased `project0`, `project1`, …, so one request covers them all. */
 function taggedRunsQuery(projectCount: number, withSummary: boolean): string {
   const indexes = [...Array(projectCount).keys()];
-  const runFields = `name displayName state tags${withSummary ? " summaryMetrics" : ""}`;
+  const runFields = `name displayName state tags group${withSummary ? " summaryMetrics" : ""}`;
   const projectVariables = indexes.map((index) => `$project${index}: String!`).join(", ");
   const projectFields = indexes.map(
     (index) =>

@@ -23,12 +23,12 @@ export function runForJob<Run extends Pick<TaggedRun, "tags">>(job: TaggedJob, r
   return undefined;
 }
 
-/** The project of each job that has a tagged run, by `JobRef.key`. */
+/** The project of each job that has a tagged run, by `JobRef.key`: `<project>/<run group>`, or the project without a group. */
 export function projectsByJob(jobs: readonly JobRef[], runs: readonly TaggedRun[]): Map<string, string> {
   return new Map(
     jobs.flatMap((job) => {
       const run = runForJob(job, runs);
-      return run ? [[job.key, run.project]] : [];
+      return run ? [[job.key, run.group ? `${run.project}/${run.group}` : run.project]] : [];
     }),
   );
 }

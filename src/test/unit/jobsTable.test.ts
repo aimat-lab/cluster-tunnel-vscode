@@ -5,9 +5,11 @@ import type { JobsReport } from "../../ctun";
 import {
   buildJobsTable,
   DEFAULT_FILTERS,
+  DEFAULT_SORT,
   effectiveSince,
   JobRow,
   JobsFilters,
+  JobsSort,
   noteReferences,
   pendingReviews,
   RowExtras,
@@ -33,6 +35,9 @@ function table(overrides: Partial<Omit<TableInputs, "filters">> & { filters?: Pa
     mode: "jobs",
     expanded: new Set(),
     extras: new Map<string, RowExtras>(),
+    collapsedProjects: new Set(),
+    sort: DEFAULT_SORT,
+    hiddenProjects: new Set(),
     ...rest,
     filters: { ...DEFAULT_FILTERS, ...filters },
   });
@@ -69,10 +74,6 @@ test("groups rows by project with Unassigned last", () => {
     model.groups.map((group) => [group.label, group.rows.length]),
     [["htfm", 3], ["legacy", 1], ["Unassigned", 4]],
   );
-  assert.deepStrictEqual(
-    model.projects.map((project) => [project.label, project.count]),
-    [["All projects", 8], ["htfm", 3], ["legacy", 1], ["Unassigned", 4]],
-  );
 });
 
 test("a job's project comes from the active source, not from its record", () => {
@@ -80,10 +81,75 @@ test("a job's project comes from the active source, not from its record", () => 
   const projects = { byJob, unassignedReason: "no project in W&B", sourceLabel: "W&B", error: undefined };
   const model = table({ projects });
   assert.deepStrictEqual(
-    model.groups.map((group) => [group.label, group.subtitle, group.rows.map((row) => row.id)]),
+    model.groups.map((group) => [group.label, group.count, group.note, group.rows.map((row) => row.id)]),
     [
-      ["htfm", "2 shown", ["101", "90"]],
-      ["Unassigned", "no project in W&B", ["102", "103", "91", "92", "93", "94"]],
+      ["htfm", 2, undefined, ["101", "90"]],
+      ["Unassigned", 6, "no project in W&B", ["102", "103", "91", "92", "93", "94"]],
+    ],
+  );
+});
+
+/** 101 in htfm, 102 in htfm/eval, 91 in htfm/eval/old, 103 in legacy. */
+const NESTED = {
+  ...JOB_PROJECTS,
+  byJob: new Map([
+    ["haicore/101", "htfm"],
+    ["haicore/102", "htfm/eval"],
+    ["haicore/91", "htfm/eval/old"],
+    ["haicore/103", "legacy"],
+  ]),
+};
+
+test("nested projects become indented bands, each counting the jobs below it", () => {
+  const model = table({ projects: NESTED });
+  assert.deepStrictEqual(
+    model.groups.map((band) => [band.project, band.label, band.depth, band.count, band.rows.map((row) => row.id)]),
+    [
+      ["htfm", "htfm", 0, 3, ["101"]],
+      ["htfm/eval", "eval", 1, 2, ["102"]],
+      ["htfm/eval/old", "old", 2, 1, ["91"]],
+      ["legacy", "legacy", 0, 1, ["103"]],
+      ["unassigned", "Unassigned", 0, 4, ["90", "92", "93", "94"]],
+    ],
+  );
+});
+
+test("a hidden project leaves out its jobs and those of the projects nested in it", () => {
+  const shownIds = (hidden: string[]) => rows(table({ projects: NESTED, hiddenProjects: new Set(hidden) })).map((row) => row.id);
+  assert.deepStrictEqual(shownIds(["htfm/eval"]), ["101", "103", "90", "92", "93", "94"]);
+  assert.deepStrictEqual(shownIds(["htfm/eva"]), ["101", "102", "91", "103", "90", "92", "93", "94"]);
+  assert.deepStrictEqual(shownIds(["htfm", UNASSIGNED]), ["103"]);
+});
+
+test("a sorted column orders the jobs inside each band and marks its header", () => {
+  const ids = (sort: JobsSort) =>
+    table({ sort }).groups.map((band) => [band.label, band.rows.map((row) => row.id)]);
+  assert.deepStrictEqual(ids({ column: "id", direction: "ascending" }), [
+    ["htfm", ["91", "101", "102"]],
+    ["legacy", ["103"]],
+    ["Unassigned", ["90", "92", "93", "94"]],
+  ]);
+  assert.deepStrictEqual(ids({ column: "state", direction: "descending" }), [
+    ["htfm", ["91", "101", "102"]],
+    ["legacy", ["103"]],
+    ["Unassigned", ["94", "92", "93", "90"]],
+  ]);
+  const model = table({ sort: { column: "elapsed", direction: "descending" } });
+  assert.deepStrictEqual(
+    model.columns.map((column) => [column.id, column.sort]),
+    [["id", undefined], ["name", undefined], ["state", undefined], ["start", undefined], ["elapsed", "descending"], ["partition", undefined]],
+  );
+});
+
+test("a folded band hides its jobs and the projects nested in it, but keeps its count", () => {
+  const model = table({ projects: NESTED, collapsedProjects: new Set(["htfm/eval"]) });
+  assert.deepStrictEqual(
+    model.groups.map((band) => [band.project, band.collapsed, band.count, band.rows.length]),
+    [
+      ["htfm", false, 3, 1],
+      ["htfm/eval", true, 2, 0],
+      ["legacy", false, 1, 1],
+      ["unassigned", false, 4, 4],
     ],
   );
 });
@@ -93,14 +159,14 @@ test("a failed project lookup shows as an error of its source", () => {
   assert.deepStrictEqual(table({ projects }).errors, [{ cluster: "W&B", message: "projects: W&B rejected the API key" }]);
 });
 
-test("the project filter combines with the state toggles and the cluster chip", () => {
+test("hidden projects combine with the state toggles and the cluster chip", () => {
   const onlyFailed = { running: false, queued: false, completed: false, failed: true, cancelled: false };
-  const htfmFailed = table({ filters: { project: "htfm", shownGroups: onlyFailed, cluster: "haicore" } });
+  const htfmFailed = table({
+    filters: { shownGroups: onlyFailed, cluster: "haicore" },
+    hiddenProjects: new Set(["legacy", UNASSIGNED]),
+  });
   assert.deepStrictEqual(rows(htfmFailed).map((row) => row.id), ["91"]);
   assert.strictEqual(htfmFailed.toggles.find((toggle) => toggle.id === "running")!.count, 2);
-
-  const unassigned = table({ filters: { project: UNASSIGNED } });
-  assert.deepStrictEqual(rows(unassigned).map((row) => row.id), ["90", "92", "93", "94"]);
 });
 
 test("a state toggle hides its jobs but keeps its count", () => {
@@ -223,10 +289,28 @@ test("shows when a job started, or Slurm's estimate while it is queued", () => {
     return rows(table({ report })).find((row) => row.id === id)!.startText;
   };
   const starts = { "101": "2026-10-13T14:02:11", "103": "2026-10-14T09:30:00", "94": "None" };
-  assert.match(startOf("101", starts) ?? "", /^Started \S/);
-  assert.match(startOf("103", starts) ?? "", /^Est\. start \S/);
-  assert.strictEqual(startOf("103", {}), "No start estimate yet");
+  assert.match(startOf("101", starts) ?? "", /^\S/);
+  assert.doesNotMatch(startOf("101", starts) ?? "", /^est\./);
+  assert.match(startOf("103", starts) ?? "", /^est\. \S/);
+  assert.strictEqual(startOf("103", {}), "no estimate yet");
   assert.strictEqual(startOf("94", starts), undefined);
+});
+
+test("by default the newest start comes first, after queued jobs without an estimate", () => {
+  const starts: Record<string, string> = { "101": "2026-10-13T14:02:11", "102": "2026-10-12T09:00:00", "91": "2026-10-11T10:00:00" };
+  const jobs = JOBS.map((job) => ({ ...job, start: starts[job.jobid] ?? "N/A" }));
+  const report: JobsReport = { ...JOBS_REPORT, clusters: [{ ...JOBS_REPORT.clusters[0], jobs }] };
+  const model = table({ report });
+  assert.deepStrictEqual(model.groups[0].rows.map((row) => row.id), ["101", "102", "91"]);
+  assert.strictEqual(model.columns.find((column) => column.id === "start")!.sort, "descending");
+});
+
+test("sorting by start puts jobs without a start time last", () => {
+  const starts: Record<string, string> = { "101": "2026-10-13T14:02:11", "102": "2026-10-12T09:00:00", "91": "N/A" };
+  const jobs = JOBS.map((job) => ({ ...job, start: starts[job.jobid] ?? "N/A" }));
+  const report: JobsReport = { ...JOBS_REPORT, clusters: [{ ...JOBS_REPORT.clusters[0], jobs }] };
+  const htfm = table({ report, sort: { column: "start", direction: "ascending" } }).groups[0];
+  assert.deepStrictEqual(htfm.rows.map((row) => row.id), ["102", "101", "91"]);
 });
 
 test("shows no start when ctun does not report one", () => {

@@ -3,10 +3,12 @@
 The W&B add-on shows a Training line in a job's details: the epoch, the
 metrics from `ctun.addons.wandb.metrics` and a link to the run. With
 `ctun.projects.source` set to `wandb`, the job's project is the W&B project of
-that run. To find the run, the add-on looks for the tag
-`slurm:<ClusterName>:<job id>` in every project of the entity, for example
-`slurm:haic:4821937`. Your training script must add that tag. The extension
-cannot read the script, so it cannot check this for you.
+that run, and a run group (`wandb.init(group=...)`) nests below it: a run in
+group `lr-sweep` of project `htfm` belongs to `htfm › lr-sweep`. To find the
+run, the add-on looks for the tag `slurm:<ClusterName>:<job id>` in every
+project of the entity, for example `slurm:haic:4821937`. Your training script
+must add that tag. The extension cannot read the script, so it cannot check
+this for you.
 
 The cluster name is Slurm's own `ClusterName`, not the name in your ctun
 config: on HAICORE it is `haic`. Two clusters can hand out the same job ID, and

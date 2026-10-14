@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
-import { buildJobsTable, DEFAULT_FILTERS, JobsTableModel, RowExtras } from "../../jobsTable";
+import { buildJobsTable, DEFAULT_FILTERS, DEFAULT_SORT, JobsSort, JobsTableModel, RowExtras } from "../../jobsTable";
 import { GUARDED_STATUS, JOBS_REPORT, LOGGED_OUT_STATUS } from "../fixtures/ctunOutput";
 import { JOB_PROJECTS } from "../fixtures/jobProjects";
 
@@ -27,7 +27,15 @@ function render(model: JobsTableModel) {
   return { app, sent, click };
 }
 
-function model(overrides: { mode?: "jobs" | "review"; expanded?: string[]; extras?: Map<string, RowExtras> } = {}) {
+function model(
+  overrides: {
+    mode?: "jobs" | "review";
+    expanded?: string[];
+    extras?: Map<string, RowExtras>;
+    collapsed?: string[];
+    sort?: JobsSort;
+  } = {},
+) {
   return buildJobsTable({
     statuses: [GUARDED_STATUS, LOGGED_OUT_STATUS],
     report: JOBS_REPORT,
@@ -39,17 +47,53 @@ function model(overrides: { mode?: "jobs" | "review"; expanded?: string[]; extra
     mode: overrides.mode ?? "jobs",
     expanded: new Set(overrides.expanded ?? []),
     extras: overrides.extras ?? new Map(),
+    collapsedProjects: new Set(overrides.collapsed ?? []),
+    hiddenProjects: new Set(),
+    sort: overrides.sort ?? DEFAULT_SORT,
   });
 }
 
 test("renders project groups, notes and the locked cluster", () => {
   const { app } = render(model());
+  assert.strictEqual(app.querySelector("select#project"), null);
   const text = app.textContent ?? "";
-  assert.match(text, /htfm 3 shown/);
-  assert.match(text, /Unassigned submitted without --project/);
+  assert.match(text, /htfm3/);
+  assert.match(text, /Unassigned4submitted without --project/);
   assert.match(text, /unreviewed Rerun of job:91/);
   assert.match(text, /bwuni3 has no tunnel/);
   assert.match(text, /To review · 3/);
+});
+
+test("a folded project band hides its jobs and asks the extension to unfold", () => {
+  const { app, sent } = render(model({ collapsed: ["htfm"] }));
+  const shownJobs = [...app.querySelectorAll<HTMLElement>("tr.job")].map((row) => row.dataset.rowKey);
+  assert.ok(!shownJobs.includes("haicore/101"));
+  const unfold = app.querySelector<HTMLButtonElement>('[aria-label="Unfold htfm"]')!;
+  assert.strictEqual(unfold.getAttribute("aria-expanded"), "false");
+  unfold.click();
+  assert.deepStrictEqual(sent.at(-1), { type: "toggleProject", project: "htfm" });
+});
+
+test("a click on a job row or Enter on it toggles its details", () => {
+  const { app, sent } = render(model({ expanded: ["haicore/101"] }));
+  const row = (key: string) => [...app.querySelectorAll<HTMLElement>("tr.job")].find((node) => node.dataset.rowKey === key)!;
+  assert.strictEqual(row("haicore/101").getAttribute("aria-expanded"), "true");
+  row("haicore/102").click();
+  row("haicore/101").dispatchEvent(new app.ownerDocument.defaultView!.KeyboardEvent("keydown", { key: "Enter" }));
+  assert.deepStrictEqual(sent.slice(-2), [
+    { type: "expand", key: "haicore/102" },
+    { type: "expand", key: "haicore/101" },
+  ]);
+  assert.strictEqual(app.querySelectorAll("button.icon-button").length, 0);
+});
+
+test("a column header sorts by its column and shows the direction", () => {
+  const { app, sent, click } = render(model({ sort: { column: "state", direction: "descending" } }));
+  const sortedHeader = app.querySelector("th[aria-sort]")!;
+  assert.strictEqual(sortedHeader.getAttribute("aria-sort"), "descending");
+  assert.strictEqual(sortedHeader.textContent, "State↓");
+  click("Partition · nodes");
+  assert.deepStrictEqual(sent.at(-1), { type: "sort", column: "partition" });
 });
 
 test("renders the details of an expanded job and sends its actions", () => {

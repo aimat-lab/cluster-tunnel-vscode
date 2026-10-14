@@ -74,8 +74,6 @@ button:disabled { cursor: default; opacity: 0.6; }
 .primary:hover { background: var(--vscode-button-hoverBackground); }
 .link-button { padding: 0; border: 0; background: none; color: var(--vscode-textLink-foreground); }
 .link-button:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
-.icon-button { height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--muted); }
-.icon-button[aria-expanded="true"] { border-color: var(--accent); color: var(--vscode-foreground); }
 
 .table-wrapper { min-width: 0; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
 table { width: 100%; min-width: 760px; border-collapse: collapse; }
@@ -88,9 +86,9 @@ th {
   letter-spacing: 0.05em;
   text-align: left;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 td { padding: 10px 16px; border-top: 1px solid var(--border); vertical-align: top; }
-td.actions { text-align: right; }
 .name-cell { max-width: 420px; }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-preview { margin-top: 3px; color: var(--muted); font-size: 12px; }
@@ -105,7 +103,63 @@ td.actions { text-align: right; }
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.group-row td { padding: 14px 16px 6px; background: var(--vscode-editor-background); border-top: 1px solid var(--border); }
+.group-row td {
+  padding: 6px 16px 6px calc(10px + var(--depth, 0) * 20px);
+  background: color-mix(in srgb, var(--accent) 4%, var(--vscode-editor-background));
+  border-top: 1px solid var(--border);
+}
+.group-row.top-level td {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--vscode-editor-background));
+  border-top-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.band-title { display: flex; align-items: center; gap: 6px; }
+.top-level .band-title strong { font-size: 13px; }
+.group-row:not(.top-level) .band-title strong { font-weight: 600; }
+.band-title .count {
+  padding: 0 7px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.fold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+}
+.fold:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); color: inherit; }
+/* A corner of two borders: rotated it points right (folded) or down (open). */
+.chevron { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateX(-1px) rotate(-45deg); }
+.fold[aria-expanded="true"] .chevron { transform: translateY(-2px) rotate(45deg); }
+.job td:first-child { padding-left: calc(16px + var(--depth, 0) * 20px); }
+.job { cursor: pointer; }
+.job:not(.expanded):hover td { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.job:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.sort-button:hover, th[aria-sort] .sort-button { color: var(--vscode-foreground); }
+.sort-arrow { min-width: 8px; }
+.elapsed { white-space: nowrap; }
 .job.expanded td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .details-row td { border-top: 0; padding: 4px 16px 16px 16px; background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .empty td { padding: 28px 16px; text-align: center; color: var(--muted); }
@@ -153,6 +207,5 @@ dl.details dd { margin: 0; }
 .group-cancelled { --group-color: var(--cancelled); }
 
 .track { height: 3px; margin-top: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
-.start { margin-top: 4px; }
 .fill { height: 100%; background: var(--cancelled); }
 .fill.active { background: var(--running); }

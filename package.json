@@ -81,8 +81,25 @@
         "icon": "$(comment-unresolved)"
       },
       {
-        "command": "ctun.filterProject",
-        "title": "Show Project Jobs",
+        "command": "ctun.hideProject",
+        "title": "Hide Project",
+        "category": "ctun",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "ctun.showProject",
+        "title": "Show Project",
+        "category": "ctun",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "ctun.showAllProjects",
+        "title": "Show All Projects",
+        "category": "ctun"
+      },
+      {
+        "command": "ctun.showOnlyProject",
+        "title": "Show Only This Project",
         "category": "ctun"
       },
       {
@@ -157,6 +174,16 @@
           "command": "ctun.logout",
           "when": "view == ctun.clusters && viewItem == cluster-live",
           "group": "inline"
+        },
+        {
+          "command": "ctun.hideProject",
+          "when": "view == ctun.projects && viewItem == project-shown",
+          "group": "inline"
+        },
+        {
+          "command": "ctun.showProject",
+          "when": "view == ctun.projects && viewItem == project-hidden",
+          "group": "inline"
         }
       ],
       "commandPalette": [
@@ -169,7 +196,15 @@
           "when": "false"
         },
         {
-          "command": "ctun.filterProject",
+          "command": "ctun.hideProject",
+          "when": "false"
+        },
+        {
+          "command": "ctun.showProject",
+          "when": "false"
+        },
+        {
+          "command": "ctun.showOnlyProject",
           "when": "false"
         }
       ]

@@ -91,18 +91,6 @@
       chips.append(button("chip", chip.label, { type: "pickCluster", cluster: chip.id }, chip.pressed));
     }
     const right = el("div", "chips");
-    right.append(
-      select(
-        "project",
-        "Project",
-        model.projects.map((project) => ({
-          value: project.id,
-          label: `${project.label} (${project.count})`,
-          selected: project.selected,
-        })),
-        (project) => vscode.postMessage({ type: "pickProject", project }),
-      ),
-    );
     const review = button(
       model.pendingCount > 0 ? "review-button pending" : "review-button",
       `To review · ${model.pendingCount}`,
@@ -120,9 +108,37 @@
     return badge;
   }
 
-  function jobRow(row) {
+  /** A project's band: fold button, name, job count and, for Unassigned, why. Indented by its depth. */
+  function projectBand(band) {
+    const title = el("span", "band-title");
+    const fold = button("fold", undefined, { type: "toggleProject", project: band.project });
+    fold.append(el("span", "chevron"));
+    fold.setAttribute("aria-expanded", String(!band.collapsed));
+    fold.setAttribute("aria-label", `${band.collapsed ? "Unfold" : "Fold"} ${band.label}`);
+    title.append(fold, el("strong", "", band.label), el("span", "count", String(band.count)));
+    if (band.note) title.append(el("span", "muted", band.note));
+    const tr = fullWidthRow(band.depth === 0 ? "group-row top-level" : "group-row", title);
+    tr.style.setProperty("--depth", String(band.depth));
+    return tr;
+  }
+
+  /** A job's row; a click or Enter/Space opens or closes its details, unless the click selected text. */
+  function jobRow(row, depth) {
     const tr = el("tr", row.expanded ? "job expanded" : "job");
+    tr.style.setProperty("--depth", String(depth));
     tr.dataset.rowKey = row.key;
+    tr.tabIndex = 0;
+    tr.setAttribute("aria-expanded", String(row.expanded));
+    tr.title = row.expanded ? "Hide details" : "Show details";
+    const toggle = () => vscode.postMessage({ type: "expand", key: row.key });
+    tr.addEventListener("click", () => {
+      if (!window.getSelection()?.toString()) toggle();
+    });
+    tr.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      toggle();
+    });
 
     const idCell = el("td");
     idCell.append(el("div", "", row.cluster), el("div", "mono muted", row.id));
@@ -142,7 +158,7 @@
     stateCell.append(stateBadge(row.group, row.stateLabel, row.state));
 
     const timeCell = el("td");
-    timeCell.append(el("div", "mono small", row.timeText));
+    timeCell.append(el("div", "mono small elapsed", row.timeText));
     if (row.progress !== undefined) {
       const track = el("div", "track");
       const fill = el("div", row.active ? "fill active" : "fill");
@@ -150,15 +166,10 @@
       track.append(fill);
       timeCell.append(track);
     }
-    if (row.startText) timeCell.append(el("div", "small muted start", row.startText));
 
-    const actionCell = el("td", "actions");
-    const expand = button("icon-button", row.expanded ? "Hide" : "Details", { type: "expand", key: row.key });
-    expand.setAttribute("aria-expanded", String(row.expanded));
-    expand.setAttribute("aria-label", `${row.expanded ? "Hide" : "Show"} details of job ${row.id}`);
-    actionCell.append(expand);
+    const startCell = el("td", row.group === "queued" ? "small muted" : "small", row.startText ?? "");
 
-    tr.append(idCell, nameCell, stateCell, timeCell, el("td", "mono small muted", row.partitionNodes), actionCell);
+    tr.append(idCell, nameCell, stateCell, startCell, timeCell, el("td", "mono small muted", row.partitionNodes));
     return tr;
   }
 
@@ -274,24 +285,32 @@
     return fullWidthRow("details-row", list);
   }
 
+  const SORT_ARROWS = { ascending: "↑", descending: "↓" };
+
+  /** A column header whose button sorts by it; `aria-sort` tells screen readers the order. */
+  function columnHeader(column) {
+    const th = el("th");
+    if (column.sort) th.setAttribute("aria-sort", column.sort);
+    const sortButton = button("sort-button", column.label, { type: "sort", column: column.id });
+    sortButton.append(el("span", "sort-arrow", column.sort ? SORT_ARROWS[column.sort] : ""));
+    th.append(sortButton);
+    return th;
+  }
+
   function table(model) {
     const wrapper = el("div", "table-wrapper");
     const tableNode = el("table");
     tableNode.setAttribute("aria-label", "Cluster jobs");
     const head = el("thead");
     const headRow = el("tr");
-    for (const title of ["Cluster · ID", "Job · why it runs", "State", "Elapsed / limit", "Partition · nodes", ""]) {
-      headRow.append(el("th", "", title));
-    }
+    for (const column of model.columns) headRow.append(columnHeader(column));
     head.append(headRow);
 
     const body = el("tbody");
-    for (const group of model.groups) {
-      const title = el("span", "");
-      title.append(el("strong", "", group.label), " ", el("span", "muted", group.subtitle));
-      body.append(fullWidthRow("group-row", title));
-      for (const row of group.rows) {
-        body.append(jobRow(row));
+    for (const band of model.groups) {
+      body.append(projectBand(band));
+      for (const row of band.rows) {
+        body.append(jobRow(row, band.depth));
         if (row.details) body.append(detailsRow(row));
       }
     }

@@ -4,6 +4,7 @@ import { jobRefs } from "./addOns";
 import type { ClusterData } from "./clusterData";
 import type { JobsReport } from "./ctun";
 import { JobProjects, RECORD_SOURCE } from "./jobsTable";
+import { normalizeProject } from "./projectTree";
 
 const SOURCE_SETTING = "ctun.projects.source";
 
@@ -62,7 +63,7 @@ export class ProjectLookup implements JobProjects, vscode.Disposable {
     if (serial !== this.lookupSerial) {
       return;
     }
-    this.byJob = byJob;
+    this.byJob = normalized(byJob);
     this.error = error;
     this.sourceLabel = addOn?.label ?? "ctun";
     this.unassignedReason = addOn ? `no project in ${addOn.label}` : "submitted without --project";
@@ -73,6 +74,11 @@ export class ProjectLookup implements JobProjects, vscode.Disposable {
 /** `record`, or the ID of the add-on whose projects group the jobs. */
 export function projectSource(): string {
   return vscode.workspace.getConfiguration().get<string>(SOURCE_SETTING) || RECORD_SOURCE;
+}
+
+/** The projects with `/` as the only level separator; a project with no name left is dropped. */
+function normalized(byJob: ReadonlyMap<string, string>): Map<string, string> {
+  return new Map([...byJob].flatMap(([key, project]) => (normalizeProject(project) ? [[key, normalizeProject(project)]] : [])));
 }
 
 /** The `--project` of each recorded job, by row key. */

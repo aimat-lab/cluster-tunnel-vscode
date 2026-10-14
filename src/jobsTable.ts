@@ -1,6 +1,7 @@
 import type { DetailLine } from "./addOns";
 import type { ClusterJobsEntry, ClusterStatus, Job, JobRecord, JobsReport } from "./ctun";
 import { baseState, STATE_GROUPS, StateGroupId, stateGroup } from "./jobStates";
+import { isHiddenBy, leafName, nestingDepth, PROJECT_SEPARATOR, selfAndAncestors, totalsWithNested, treeOrder } from "./projectTree";
 import { Review, reviewKey } from "./reviews";
 
 export const SINCE_OPTIONS = [
@@ -9,8 +10,24 @@ export const SINCE_OPTIONS = [
   { value: "30d", label: "Last 30 days" },
 ] as const;
 
+/** The table's columns; each sorts its jobs by what it shows. */
+export const COLUMNS = [
+  { id: "id", label: "Cluster · ID" },
+  { id: "name", label: "Job · why it runs" },
+  { id: "state", label: "State" },
+  { id: "start", label: "Start" },
+  { id: "elapsed", label: "Elapsed / limit" },
+  { id: "partition", label: "Partition · nodes" },
+] as const;
+
+export type ColumnId = (typeof COLUMNS)[number]["id"];
+export type SortDirection = "ascending" | "descending";
+/** The column the jobs are sorted by. */
+export type JobsSort = { column: ColumnId; direction: SortDirection };
+/** Newest start first; queued jobs without an estimate come before all. */
+export const DEFAULT_SORT: JobsSort = { column: "start", direction: "descending" };
+
 export const ALL_CLUSTERS = "all";
-export const ALL_PROJECTS = "all";
 /** The `ctun.projects.source` value that takes projects from ctun's `--project`. */
 export const RECORD_SOURCE = "record";
 /** The project of a job its project source names none for. */
@@ -28,15 +45,12 @@ export interface JobsFilters {
   since: string;
   /** A cluster name, or `ALL_CLUSTERS`. */
   cluster: string;
-  /** A project name, `UNASSIGNED`, or `ALL_PROJECTS`. */
-  project: string;
 }
 
 export const DEFAULT_FILTERS: JobsFilters = {
   shownGroups: { running: true, queued: true, completed: true, failed: true, cancelled: true },
   since: "24h",
   cluster: ALL_CLUSTERS,
-  project: ALL_PROJECTS,
 };
 
 /** The add-ons' lines for an expanded row; while loading, the labels of the add-ons asked. */
@@ -76,23 +90,43 @@ export interface TableInputs {
   /** Row keys (`<cluster>/<job id>`) whose details are open. */
   expanded: ReadonlySet<string>;
   extras: ReadonlyMap<string, RowExtras>;
+  /** Projects whose band is folded: their jobs and nested projects are hidden. */
+  collapsedProjects: ReadonlySet<string>;
+  /** Sorts the jobs inside each project band. */
+  sort: JobsSort;
+  /** Projects whose eye is closed in the Projects view; their jobs and those nested below are left out. */
+  hiddenProjects: ReadonlySet<string>;
 }
 
 /** Everything the webview renders; it has no logic of its own. */
 export interface JobsTableModel {
   mode: "jobs" | "review";
+  columns: { id: ColumnId; label: string; sort: SortDirection | undefined }[];
   toggles: { id: StateGroupId; label: string; count: number; pressed: boolean }[];
   since: string;
   sinceOptions: typeof SINCE_OPTIONS;
   chips: { id: string; label: string; pressed: boolean }[];
-  projects: { id: string; label: string; count: number; selected: boolean }[];
-  groups: { project: string; label: string; subtitle: string; rows: JobRow[] }[];
+  /** One band per project in tree order, with the jobs directly in it; folded bands hide what is below. */
+  groups: ProjectBand[];
   lockedClusters: { cluster: string; loggingIn: boolean }[];
   errors: { cluster: string; message: string }[];
   showEmpty: boolean;
   updatedText: string;
   pendingCount: number;
   reviewCards: ReviewCard[];
+}
+
+export interface ProjectBand {
+  project: string;
+  /** The deepest level's name, e.g. `multihead` for `htfm/multihead`. */
+  label: string;
+  depth: number;
+  /** Shown jobs in the project and nested below it. */
+  count: number;
+  /** Why Unassigned jobs have no project; undefined for real projects. */
+  note: string | undefined;
+  collapsed: boolean;
+  rows: JobRow[];
 }
 
 export type NoteStatus = "unreviewed" | Review["status"];
@@ -118,7 +152,7 @@ export interface JobRow {
   timeText: string;
   /** Elapsed share of the time limit, 0–1; undefined for an unlimited or unreadable limit. */
   progress: number | undefined;
-  /** When the job started or, if queued, is estimated to start; undefined when unknown. */
+  /** When the job started, e.g. `Oct 14, 01:53 PM`; `est. …` while queued; undefined when unknown. */
   startText: string | undefined;
   active: boolean;
   partitionNodes: string;
@@ -208,19 +242,18 @@ export function pendingReviews(
 export function buildJobsTable(inputs: TableInputs): JobsTableModel {
   const { statuses, report, filters, projects } = inputs;
   const isInClusterFilter = (cluster: string) => filters.cluster === ALL_CLUSTERS || filters.cluster === cluster;
-  const isInProjectFilter = ({ entry, job }: LiveJob) =>
-    filters.project === ALL_PROJECTS || filters.project === projectOf(projects, entry.cluster, job.jobid);
+  const isInShownProject = ({ entry, job }: LiveJob) => !isHiddenBy(projectOf(projects, entry.cluster, job.jobid), inputs.hiddenProjects);
   const isShown = (job: Job) => {
     const group = stateGroup(job);
     return group === undefined || filters.shownGroups[group];
   };
 
   const allJobs = liveJobs(report);
-  const filtered = allJobs.filter((liveJob) => isInClusterFilter(liveJob.entry.cluster) && isInProjectFilter(liveJob));
+  const filtered = allJobs.filter((liveJob) => isInClusterFilter(liveJob.entry.cluster) && isInShownProject(liveJob));
   const records = allRecords(report);
-  const rows = filtered
-    .filter(({ job }) => isShown(job))
-    .map(({ entry, job }) => toRow(entry.cluster, job, inputs, records, allJobs));
+  const rows = sorted(filtered.filter(({ job }) => isShown(job)), inputs.sort).map(({ entry, job }) =>
+    toRow(entry.cluster, job, inputs, records, allJobs),
+  );
 
   const lockedClusters = statuses
     .filter((status) => !status.live && isInClusterFilter(status.cluster))
@@ -233,11 +266,14 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
     return messages.flatMap((message) => (message ? [{ cluster: entry.cluster, message }] : []));
   });
   const projectErrors = projects.error ? [{ cluster: projects.sourceLabel, message: `projects: ${projects.error}` }] : [];
-  const counts = projectCounts(report, projects);
   const reviewCards = pendingReviews(report, inputs.reviews, projects);
 
   return {
     mode: inputs.mode,
+    columns: COLUMNS.map((column) => ({
+      ...column,
+      sort: inputs.sort.column === column.id ? inputs.sort.direction : undefined,
+    })),
     toggles: STATE_GROUPS.map((group) => ({
       id: group.id,
       label: group.label,
@@ -251,16 +287,7 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
       label: id === ALL_CLUSTERS ? "All clusters" : id,
       pressed: filters.cluster === id,
     })),
-    projects: [
-      { id: ALL_PROJECTS, label: "All projects", count: allJobs.length, selected: filters.project === ALL_PROJECTS },
-      ...sortProjects([...counts.keys()]).map((project) => ({
-        id: project,
-        label: projectLabel(project),
-        count: counts.get(project) ?? 0,
-        selected: filters.project === project,
-      })),
-    ],
-    groups: groupByProject(rows, filtered, projects),
+    groups: projectBands(rows, filtered, projects, inputs.collapsedProjects),
     lockedClusters,
     errors: [...clusterErrors, ...projectErrors],
     showEmpty: rows.length === 0 && lockedClusters.length === 0,
@@ -274,8 +301,14 @@ export function rowKey(cluster: string, jobId: string): string {
   return `${cluster}/${jobId}`;
 }
 
+/** The full path, e.g. `htfm › multihead`. */
 export function projectLabel(project: string): string {
-  return project === UNASSIGNED ? "Unassigned" : project;
+  return project === UNASSIGNED ? "Unassigned" : project.split(PROJECT_SEPARATOR).join(" › ");
+}
+
+/** The name on a project's band or option, below its parent: `multihead` for `htfm/multihead`. */
+export function bandLabel(project: string): string {
+  return project === UNASSIGNED ? "Unassigned" : leafName(project);
 }
 
 type LiveJob = { entry: ClusterJobsEntry; job: Job };
@@ -292,29 +325,77 @@ function allRecords(report: JobsReport | undefined): ClusterRecord[] {
   ]);
 }
 
-/** Projects by name, with Unassigned last. */
-export function sortProjects(projects: string[]): string[] {
-  return projects.sort((a, b) => (a === UNASSIGNED ? 1 : b === UNASSIGNED ? -1 : a.localeCompare(b)));
+/** Compares two jobs by what a column shows; ties keep ctun's order, since the sort is stable. */
+const COMPARE_BY_COLUMN: Record<ColumnId, (a: LiveJob, b: LiveJob) => number> = {
+  id: (a, b) => naturalCompare(rowKey(a.entry.cluster, a.job.jobid), rowKey(b.entry.cluster, b.job.jobid)),
+  name: (a, b) => naturalCompare(a.job.name, b.job.name),
+  state: (a, b) => stateRank(a.job) - stateRank(b.job) || naturalCompare(stateLabel(a.job), stateLabel(b.job)),
+  start: (a, b) => compareNumbers(startEpoch(a.job), startEpoch(b.job)),
+  elapsed: (a, b) => (slurmDurationSeconds(a.job.elapsed) ?? -1) - (slurmDurationSeconds(b.job.elapsed) ?? -1),
+  partition: (a, b) => naturalCompare(`${a.job.partition} ${a.job.nodes}`, `${b.job.partition} ${b.job.nodes}`),
+};
+
+function sorted(jobs: LiveJob[], sort: JobsSort): LiveJob[] {
+  const compare = COMPARE_BY_COLUMN[sort.column];
+  const sign = sort.direction === "ascending" ? 1 : -1;
+  return [...jobs].sort((a, b) => sign * compare(a, b));
 }
 
-function groupByProject(rows: JobRow[], filtered: LiveJob[], projects: JobProjects): JobsTableModel["groups"] {
+/** When the job started or is estimated to start; a job without a time starts after all others. */
+function startEpoch(job: Job): number {
+  return job.start !== undefined && SLURM_TIME.test(job.start) ? Date.parse(job.start) : Number.POSITIVE_INFINITY;
+}
+
+function compareNumbers(a: number, b: number): number {
+  return a === b ? 0 : a < b ? -1 : 1;
+}
+
+/** `job 9` before `job 10`. */
+function naturalCompare(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true });
+}
+
+/** The state toggles' order: running, queued, completed, failed, cancelled, then states outside them. */
+function stateRank(job: Job): number {
+  const index = STATE_GROUPS.findIndex((group) => group.id === stateGroup(job));
+  return index === -1 ? STATE_GROUPS.length : index;
+}
+
+/** Projects in tree order, with Unassigned last. */
+export function sortProjects(projects: Iterable<string>): string[] {
+  return treeOrder(projects, UNASSIGNED);
+}
+
+function projectBands(
+  rows: JobRow[],
+  filtered: LiveJob[],
+  projects: JobProjects,
+  collapsedProjects: ReadonlySet<string>,
+): ProjectBand[] {
   const projectByRow = new Map(
     filtered.map(({ entry, job }) => [rowKey(entry.cluster, job.jobid), projectOf(projects, entry.cluster, job.jobid)]),
   );
-  const groups = new Map<string, JobRow[]>();
+  const rowsByProject = new Map<string, JobRow[]>();
   for (const row of rows) {
     const project = projectByRow.get(row.key) ?? UNASSIGNED;
-    groups.set(project, [...(groups.get(project) ?? []), row]);
+    rowsByProject.set(project, [...(rowsByProject.get(project) ?? []), row]);
   }
-  return sortProjects([...groups.keys()]).map((project) => {
-    const projectRows = groups.get(project) ?? [];
-    return {
-      project,
-      label: projectLabel(project),
-      subtitle: project === UNASSIGNED ? projects.unassignedReason : `${projectRows.length} shown`,
-      rows: projectRows,
-    };
-  });
+  const shownCounts = totalsWithNested(new Map([...rowsByProject].map(([project, projectRows]) => [project, projectRows.length])));
+  const isInFoldedProject = (project: string) => selfAndAncestors(project).slice(0, -1).some((above) => collapsedProjects.has(above));
+  return sortProjects(shownCounts.keys())
+    .filter((project) => !isInFoldedProject(project))
+    .map((project) => {
+      const collapsed = collapsedProjects.has(project);
+      return {
+        project,
+        label: bandLabel(project),
+        depth: nestingDepth(project),
+        count: shownCounts.get(project) ?? 0,
+        note: project === UNASSIGNED ? projects.unassignedReason : undefined,
+        collapsed,
+        rows: collapsed ? [] : rowsByProject.get(project) ?? [],
+      };
+    });
 }
 
 function toRow(cluster: string, job: Job, inputs: TableInputs, records: ClusterRecord[], allJobs: LiveJob[]): JobRow {
@@ -435,16 +516,16 @@ export function stateLabel(job: Job): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** `Started …`, or `Est. start …` for a queued job; undefined when ctun gave no start or Slurm has none. */
+/** The start time, or `est. …` for a queued job; undefined when ctun gave no start or Slurm has none. */
 function startText(job: Job, group: StateGroupId | undefined): string | undefined {
   if (job.start === undefined) {
     return undefined;
   }
   const start = slurmTime(job.start);
   if (group === "queued") {
-    return start ? `Est. start ${start}` : "No start estimate yet";
+    return start ? `est. ${start}` : "no estimate yet";
   }
-  return start ? `Started ${start}` : undefined;
+  return start;
 }
 
 /** A Slurm time in the table's format; undefined for `N/A`, `Unknown`, `None` or no time at all. */

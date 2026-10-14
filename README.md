@@ -12,10 +12,17 @@ straight to ctun's stdin.
   Log in asks for the budget, OTP and password in VS Code input boxes, or opens
   ctun's own login window (`ctun.login.method`); log out closes the tunnel.
   `ctun login -i` run by an agent or in a terminal of the window asks there too.
-  Below it, **Projects** lists the jobs per project; a click filters the table.
+  Below it, **Projects** lists the jobs per project. The eye next to a project
+  hides its jobs, and those of every project below it, in the job list; hidden
+  projects stay hidden across restarts (Settings Sync carries them). Opening the
+  eye of a project below a hidden one shows just that project. A click on a name
+  opens the job list with only that project and every project below it; the
+  arrow opens or closes its subprojects; **All projects** shows every project again.
   `ctun.projects.source` picks where projects come from: the `--project` of
-  ctun's job record (default), or an add-on such as W&B. Jobs the source names
-  no project for are Unassigned.
+  ctun's job record (default), or an add-on such as W&B. A `/` nests projects:
+  `--project htfm/multihead` is `multihead` inside `htfm`, and the view is a tree
+  whose counts include the nested projects. Jobs the source names no project
+  for are Unassigned.
 - **Setup view** (below Projects): whether ctun is found, how many clusters its
   config has, the login method, whether ctun's Claude Code skill is in your global
   Claude folder (`~/.claude/skills/cluster-tunnel`, or under `CLAUDE_CONFIG_DIR`),
@@ -25,9 +32,14 @@ straight to ctun's stdin.
   fine, amber needs fixing, grey is an optional feature that is off. A click
   opens the setting or runs the command that fixes the row.
 - **Cluster jobs** tab: one list of the jobs on every connected cluster, grouped by
-  project and filtered by state (Running, Queued, Completed, Failed, Cancelled), by
-  an "Ended in" window (24 h, 7 d, 30 d), by cluster and by project. It refreshes
-  every 60 s while it is visible. **Details** on a row shows:
+  project in indented bands (nested projects below their parent; a click on the
+  arrow folds a band) and filtered by state (Running, Queued, Completed, Failed,
+  Cancelled), by an "Ended in" window (24 h, 7 d, 30 d), by cluster and by the
+  eyes in the Projects view. It refreshes
+  every 60 s while it is visible. A click on a column header sorts the jobs inside
+  each project by it (ascending, descending, then back to the default: newest start
+  first). A click
+  on a row, or Enter, opens its details:
   - the agent's **note**, an unreviewed draft until you confirm, edit or discard it;
   - **Code**: the commit at submit time, whether it was pushed, uncommitted files;
   - **From**: the machine and time of the submission;
@@ -55,7 +67,7 @@ touches the table. The interface is in `src/addOns.ts`; it is internal for now.
 
 - **W&B** (`ctun.addons.wandb.enabled`): a **Training** line with the epoch and
   metrics of the job's W&B run and a link to it, and W&B projects for
-  `ctun.projects.source: wandb`. A run is found by its tag
+  `ctun.projects.source: wandb`, nested by run group (`<project>/<group>`). A run is found by its tag
   `slurm:<ClusterName>:<job id>`, or the older `slurm:<job id>`, in the
   entity's first 100 projects. Tagging a run in W&B later moves an old job into
   its project. Your training script adds the tag:

@@ -31,6 +31,7 @@ const RESUMED_RUN = {
   displayName: "2026-10-12_1319_lr1e-3_k3x9p2qa",
   state: "running",
   tags: ["slurm:4821937", "slurm:haic:4821990", "baseline"],
+  group: "lr-sweep",
   summaryMetrics: JSON.stringify({ epoch: 31, "val/loss": 0.6912, "val/mae_T_trans": 38.27, "val/accuracy": 0.916 }),
 };
 
@@ -38,8 +39,8 @@ function job(jobId: string, slurmCluster: string | null = "haic", cluster = "hai
   return { key: `${cluster}/${jobId}`, cluster, slurmCluster, jobId, name: "train", state: "RUNNING", record: null };
 }
 
-function run(project: string, tags: string[]): TaggedRun {
-  return { project, name: "r", displayName: "r", state: "running", tags, url: "", summary: {} };
+function run(project: string, tags: string[], group: string | null = null): TaggedRun {
+  return { project, name: "r", displayName: "r", state: "running", tags, group, url: "", summary: {} };
 }
 
 test("searches every project of the entity for tagged runs in one request", async () => {
@@ -49,6 +50,7 @@ test("searches every project of the entity for tagged runs in one request", asyn
   assert.deepStrictEqual(runs.map((found) => [found.project, found.name]), [["htfm_multihead", "k3x9p2qa"]]);
   assert.strictEqual(runs[0].url, "https://wandb.ai/example-user/htfm_multihead/runs/k3x9p2qa");
   assert.strictEqual(runs[0].summary.epoch, 31);
+  assert.strictEqual(runs[0].group, "lr-sweep");
 
   const runsQuery = requests.at(-1)!;
   assert.strictEqual(requests.length, 3); // the key's own entity, its projects, the runs
@@ -93,10 +95,10 @@ test("the run with the cluster tag wins over one with the bare tag", () => {
   assert.strictEqual(runForJob(job("7", "horeka"), [qualified]), undefined);
 });
 
-test("maps each job with a tagged run to the run's project, by row key", () => {
+test("maps each job with a tagged run to the run's project and group, by row key", () => {
   const jobs = [job("7"), job("7", "hk", "horeka"), job("8")];
-  const runs = [run("htfm", ["slurm:haic:7"]), run("sweeps", ["slurm:hk:7"])];
-  assert.deepStrictEqual([...projectsByJob(jobs, runs)], [["haicore/7", "htfm"], ["horeka/7", "sweeps"]]);
+  const runs = [run("htfm", ["slurm:haic:7"], "lr-sweep"), run("sweeps", ["slurm:hk:7"])];
+  assert.deepStrictEqual([...projectsByJob(jobs, runs)], [["haicore/7", "htfm/lr-sweep"], ["horeka/7", "sweeps"]]);
 });
 
 test("summarizes the epoch and the chosen metrics", () => {

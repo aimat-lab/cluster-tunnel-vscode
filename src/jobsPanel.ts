@@ -5,17 +5,22 @@ import { DetailLine, jobRefs } from "./addOns";
 import type { ClusterData } from "./clusterData";
 import {
   ALL_CLUSTERS,
-  ALL_PROJECTS,
   buildJobsTable,
   ChangesState,
+  ColumnId,
   DEFAULT_FILTERS,
+  DEFAULT_SORT,
   effectiveSince,
   JobsFilters,
+  JobsSort,
   JobsTableModel,
+  projectOf,
   RowExtras,
 } from "./jobsTable";
 import { StateGroupId, stateGroup } from "./jobStates";
+import type { HiddenProjects } from "./hiddenProjects";
 import type { ProjectLookup } from "./projects";
+import { selfAndAncestors } from "./projectTree";
 import type { ReviewStatus, ReviewStore } from "./reviews";
 
 /** Each refresh runs `sacct` on a login node, so not more often than this. */
@@ -25,6 +30,7 @@ const AUTO_REFRESH_MS = 60_000;
 export interface JobsPanelServices {
   data: ClusterData;
   projects: ProjectLookup;
+  hiddenProjects: HiddenProjects;
   addOns: AddOnRegistry;
   reviews: ReviewStore;
   /** Called after a review changed, so the badge and status bar follow. */
@@ -37,7 +43,8 @@ type WebviewMessage =
   | { type: "ready" }
   | { type: "toggle"; group: StateGroupId }
   | { type: "pickCluster"; cluster: string }
-  | { type: "pickProject"; project: string }
+  | { type: "toggleProject"; project: string }
+  | { type: "sort"; column: ColumnId }
   | { type: "pickSince"; since: string }
   | { type: "refresh" }
   | { type: "login"; cluster: string }
@@ -56,6 +63,10 @@ export class JobsPanel {
   private filters: JobsFilters = DEFAULT_FILTERS;
   private mode: JobsTableModel["mode"] = "jobs";
   private readonly expanded = new Set<string>();
+  /** Folded project bands; kept while the tab is open. */
+  private readonly collapsedProjects = new Set<string>();
+  /** Kept while the tab is open. */
+  private sort = DEFAULT_SORT;
   private readonly extras = new Map<string, RowExtras>();
   private refreshTimer: NodeJS.Timeout | undefined;
   private refreshing = false;
@@ -95,16 +106,11 @@ export class JobsPanel {
       panel.onDidDispose(() => this.dispose()),
       services.data.onDidChange(() => this.post()),
       services.projects.onDidChange(() => this.post()),
+      services.hiddenProjects.onDidChange(() => this.post()),
       services.addOns.onDidChange(() => this.reloadAddOnLines()),
     );
     services.data.since = effectiveSince(this.filters);
     this.followVisibility();
-  }
-
-  /** Shows only `project`'s jobs (from the Projects view). */
-  filterProject(project: string): void {
-    this.mode = "jobs";
-    this.setFilters({ ...this.filters, project });
   }
 
   /** Switches to the review cards. */
@@ -113,14 +119,19 @@ export class JobsPanel {
     this.post();
   }
 
-  /** Opens one job's details and scrolls to it; no filter, not even its state toggle, hides it. */
+  /** Opens one job's details and scrolls to it; no filter, state toggle or hidden project hides it. */
   revealJob(key: string): void {
     this.mode = "jobs";
     this.expanded.add(key);
     this.reveal = { key, serial: (this.reveal?.serial ?? 0) + 1 };
+    const project = this.projectOfRow(key);
+    for (const level of selfAndAncestors(project)) {
+      this.collapsedProjects.delete(level);
+    }
+    void this.services.hiddenProjects.reveal(project);
     const group = this.groupOf(key);
     const shownGroups = group ? { ...this.filters.shownGroups, [group]: true } : this.filters.shownGroups;
-    this.setFilters({ ...this.filters, shownGroups, cluster: ALL_CLUSTERS, project: ALL_PROJECTS });
+    this.setFilters({ ...this.filters, shownGroups, cluster: ALL_CLUSTERS });
     void this.loadAddOnLines(key);
   }
 
@@ -138,8 +149,15 @@ export class JobsPanel {
       case "pickCluster":
         this.setFilters({ ...this.filters, cluster: message.cluster });
         return;
-      case "pickProject":
-        this.setFilters({ ...this.filters, project: message.project });
+      case "toggleProject":
+        if (!this.collapsedProjects.delete(message.project)) {
+          this.collapsedProjects.add(message.project);
+        }
+        this.post();
+        return;
+      case "sort":
+        this.sort = nextSort(this.sort, message.column);
+        this.post();
         return;
       case "pickSince":
         this.setFilters({ ...this.filters, since: message.since });
@@ -225,6 +243,11 @@ export class JobsPanel {
     return card?.note ?? row?.note?.text ?? "";
   }
 
+  private projectOfRow(key: string): string {
+    const [cluster, ...jobIdParts] = key.split("/");
+    return projectOf(this.services.projects, cluster, jobIdParts.join("/"));
+  }
+
   private groupOf(key: string): StateGroupId | undefined {
     const [cluster, ...jobIdParts] = key.split("/");
     const jobId = jobIdParts.join("/");
@@ -306,6 +329,9 @@ export class JobsPanel {
       mode: this.mode,
       expanded: this.expanded,
       extras: this.extras,
+      collapsedProjects: this.collapsedProjects,
+      sort: this.sort,
+      hiddenProjects: this.services.hiddenProjects.all(),
     });
   }
 
@@ -324,6 +350,18 @@ export class JobsPanel {
     this.disposables.forEach((disposable) => disposable.dispose());
     JobsPanel.current = undefined;
   }
+}
+
+/** A click on a column sorts it ascending, then descending, then back to the default sort. */
+function nextSort(current: JobsSort, column: ColumnId): JobsSort {
+  if (current.column !== column) {
+    return { column, direction: "ascending" };
+  }
+  if (current.direction === "ascending") {
+    return { column, direction: "descending" };
+  }
+  const isDefault = column === DEFAULT_SORT.column && current.direction === DEFAULT_SORT.direction;
+  return isDefault ? { column, direction: "ascending" } : DEFAULT_SORT;
 }
 
 function renderHtml(webview: vscode.Webview, mediaRoot: vscode.Uri): string {

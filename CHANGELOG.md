@@ -12,10 +12,20 @@ All notable changes to the ctun VS Code extension. The format follows
 - "Cluster jobs" tab from `ctun jobs --json`: one list filtered by state toggles,
   an "Ended in" window and cluster chips; refreshes every 60 s while visible.
 - Status-bar entry with the connected clusters and their budget use.
-- Projects: the table is grouped by project, with a project filter and a
-  Projects view with counts. `ctun.projects.source` picks the source: the job
+- Every column of the job list sorts on a click of its header (ascending,
+  descending, back to the default), inside each project band. By default the
+  newest start comes first. The start time (or Slurm's
+  estimate for a queued job) has its own Start column, apart from Elapsed / limit.
+  A click on a job row opens its details; the Details button is gone.
+- Projects: the table is grouped by project, and a Projects view shows the
+  counts. Its eyes hide projects from the table, a project's eye also hiding the
+  ones nested in it; hidden projects are kept in `globalState`. `ctun.projects.source` picks the source: the job
   record's `--project` (default) or an add-on's projects. Jobs without one count
-  as Unassigned.
+  as Unassigned. A `/` nests projects (`htfm/multihead`): the table shows one
+  indented band per level with a fold arrow and the jobs below it, the Projects
+  view is a tree; a click on a name opens the job list with only that project
+  and the ones below it. The W&B
+  add-on nests a run's group below its project.
 - Setup view: a "Claude skill" row shows whether ctun's skill is in the global
   Claude folder (`~/.claude`, or `CLAUDE_CONFIG_DIR`). A click offers to install
   it from GitHub at the tag of the installed ctun (or `main`), or to open its

@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import { test } from "node:test";
+import { jobRefs } from "../../addOns";
 import type { JobsReport } from "../../ctun";
 import {
   buildJobsTable,
@@ -16,7 +17,7 @@ import {
 } from "../../jobsTable";
 import type { Review } from "../../reviews";
 import { GUARDED_STATUS, JOBS, JOBS_REPORT, LOGGED_OUT_STATUS } from "../fixtures/ctunOutput";
-import { JOB_PROJECTS } from "../fixtures/wandbProjects";
+import { JOB_PROJECTS } from "../fixtures/jobProjects";
 
 const STATUSES = [LOGGED_OUT_STATUS, GUARDED_STATUS];
 
@@ -74,18 +75,22 @@ test("groups rows by project with Unassigned last", () => {
   );
 });
 
-test("a job's project is its W&B run's, not the one its record names", () => {
-  const projects = { byJob: new Map([["90", "htfm"], ["101", "htfm"]]), error: undefined };
+test("a job's project comes from the active source, not from its record", () => {
+  const byJob = new Map([["haicore/90", "htfm"], ["haicore/101", "htfm"]]);
+  const projects = { byJob, unassignedReason: "no project in W&B", sourceLabel: "W&B", error: undefined };
   const model = table({ projects });
   assert.deepStrictEqual(
-    model.groups.map((group) => [group.label, group.rows.map((row) => row.id)]),
-    [["htfm", ["101", "90"]], ["Unassigned", ["102", "103", "91", "92", "93", "94"]]],
+    model.groups.map((group) => [group.label, group.subtitle, group.rows.map((row) => row.id)]),
+    [
+      ["htfm", "2 shown", ["101", "90"]],
+      ["Unassigned", "no project in W&B", ["102", "103", "91", "92", "93", "94"]],
+    ],
   );
 });
 
-test("a failed W&B lookup shows as an error", () => {
-  const model = table({ projects: { ...JOB_PROJECTS, error: "W&B rejected the API key" } });
-  assert.deepStrictEqual(model.errors, [{ cluster: "W&B", message: "projects: W&B rejected the API key" }]);
+test("a failed project lookup shows as an error of its source", () => {
+  const projects = { ...JOB_PROJECTS, sourceLabel: "W&B", error: "W&B rejected the API key" };
+  assert.deepStrictEqual(table({ projects }).errors, [{ cluster: "W&B", message: "projects: W&B rejected the API key" }]);
 });
 
 test("the project filter combines with the state toggles and the cluster chip", () => {
@@ -176,18 +181,19 @@ test("details show the code facts, the submitter and the previous run", () => {
   assert.strictEqual(rows(model).find((row) => row.id === "102")!.details, undefined);
 });
 
-test("details carry the loaded training line and commit list", () => {
+test("details carry the add-on lines and the commit list", () => {
+  const training = { label: "Training", text: "epoch 31 · val/loss 0.690", link: { label: "W&B", url: "https://wandb.ai/e/p/runs/r" } };
   const extras = new Map<string, RowExtras>([
     [
       "haicore/101",
       {
-        training: { state: "loaded", text: "epoch 31 · val/loss 0.690", url: "https://wandb.ai/e/p/runs/r" },
+        addOnLines: { state: "loaded", lines: [training] },
         changes: { state: "loaded", commits: [{ hash: "87d86d4", message: "Fix paths" }] },
       },
     ],
   ]);
   const details = rows(table({ expanded: new Set(["haicore/101"]), extras })).find((row) => row.id === "101")!.details!;
-  assert.strictEqual(details.training?.state, "loaded");
+  assert.deepStrictEqual(details.addOnLines, { state: "loaded", lines: [training] });
   assert.deepStrictEqual(details.changes, { state: "loaded", commits: [{ hash: "87d86d4", message: "Fix paths" }] });
 });
 
@@ -225,4 +231,20 @@ test("shows when a job started, or Slurm's estimate while it is queued", () => {
 
 test("shows no start when ctun does not report one", () => {
   assert.ok(rows(table()).every((row) => row.startText === undefined));
+});
+
+test("add-ons see every listed and recorded job with its Slurm cluster", () => {
+  const report: JobsReport = { ...JOBS_REPORT, clusters: [{ ...JOBS_REPORT.clusters[0], slurm_cluster: "haic" }] };
+  const refs = jobRefs(report);
+  assert.deepStrictEqual(refs.map((job) => job.key), [...JOBS.map((job) => `haicore/${job.jobid}`), "haicore/80"]);
+  assert.deepStrictEqual(refs.at(-1), {
+    key: "haicore/80",
+    cluster: "haicore",
+    slurmCluster: "haic",
+    jobId: "80",
+    name: "train",
+    state: undefined,
+    record: JOBS_REPORT.clusters[0].records_without_job![0],
+  });
+  assert.ok(jobRefs(JOBS_REPORT).every((job) => job.slurmCluster === null));
 });

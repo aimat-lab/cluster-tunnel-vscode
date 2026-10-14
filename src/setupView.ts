@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
+import type { AddOnRegistry } from "./addOnRegistry";
 import type { ClusterData } from "./clusterData";
 import type { LoginMethod } from "./login";
+import { projectSource } from "./projects";
 import { SetupCheck, SetupHealth, setupChecks } from "./setupChecks";
-import { WANDB_KEY_SECRET } from "./training";
 
 export const SETUP_VIEW_ID = "ctun.setup";
 
@@ -20,10 +21,10 @@ export class SetupView implements vscode.TreeDataProvider<SetupCheck> {
 
   constructor(
     private readonly data: ClusterData,
-    private readonly secrets: vscode.SecretStorage,
+    private readonly addOns: AddOnRegistry,
   ) {
     data.onDidChange(() => this.changed.fire());
-    secrets.onDidChange(({ key }) => key === WANDB_KEY_SECRET && this.changed.fire());
+    addOns.onDidChange(() => this.changed.fire());
     vscode.workspace.onDidChangeConfiguration((event) => event.affectsConfiguration("ctun") && this.changed.fire());
   }
 
@@ -32,16 +33,17 @@ export class SetupView implements vscode.TreeDataProvider<SetupCheck> {
       return check.children ?? [];
     }
     const settings = vscode.workspace.getConfiguration("ctun");
+    const source = projectSource();
+    const sourceAddOn = this.addOns.get(source);
+    const addOnChecks = await Promise.all(this.addOns.all().flatMap((addOn) => (addOn.setupCheck ? [addOn.setupCheck()] : [])));
     return setupChecks({
       ctunPath: settings.get<string>("path") || "ctun",
       refreshed: this.data.updatedAt !== undefined || this.data.error !== undefined,
       ctunError: this.data.error,
       clusterCount: this.data.statuses.length,
       loginMethod: settings.get<LoginMethod>("login.method") ?? "vscode",
-      wandb: {
-        hasKey: (await this.secrets.get(WANDB_KEY_SECRET)) !== undefined,
-        entity: settings.get<string>("wandb.entity") ?? "",
-      },
+      projects: { source, addOn: sourceAddOn && { label: sourceAddOn.label, active: sourceAddOn.active } },
+      addOnChecks,
     });
   }
 

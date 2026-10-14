@@ -1,3 +1,4 @@
+import type { DetailLine } from "./addOns";
 import type { ClusterJobsEntry, ClusterStatus, Job, JobRecord, JobsReport } from "./ctun";
 import { baseState, STATE_GROUPS, StateGroupId, stateGroup } from "./jobStates";
 import { Review, reviewKey } from "./reviews";
@@ -10,7 +11,9 @@ export const SINCE_OPTIONS = [
 
 export const ALL_CLUSTERS = "all";
 export const ALL_PROJECTS = "all";
-/** The project of a job no W&B run is tagged with. */
+/** The `ctun.projects.source` value that takes projects from ctun's `--project`. */
+export const RECORD_SOURCE = "record";
+/** The project of a job its project source names none for. */
 export const UNASSIGNED = "unassigned";
 const FINISHED_GROUPS: readonly StateGroupId[] = ["completed", "failed", "cancelled"];
 const SHORT_COMMIT_LENGTH = 7;
@@ -36,14 +39,8 @@ export const DEFAULT_FILTERS: JobsFilters = {
   project: ALL_PROJECTS,
 };
 
-/** Where an unavailable Training line points the user: the Setup view, or the guide to tagging runs. */
-export type TrainingHelp = "setup" | "tagging";
-
-/** Results the panel loads on demand for an expanded row. */
-export type TrainingState =
-  | { state: "loading" }
-  | { state: "unavailable"; text: string; help?: TrainingHelp }
-  | { state: "loaded"; text: string; url: string };
+/** The add-ons' lines for an expanded row; while loading, the labels of the add-ons asked. */
+export type AddOnLinesState = { state: "loading"; labels: string[] } | { state: "loaded"; lines: DetailLine[] };
 
 export type ChangesState =
   | { state: "loading" }
@@ -51,14 +48,18 @@ export type ChangesState =
   | { state: "error"; text: string };
 
 export interface RowExtras {
-  training?: TrainingState;
+  addOnLines?: AddOnLinesState;
   changes?: ChangesState;
 }
 
-/** The W&B project of each job, found by its run's `slurm:<job id>` tag. */
+/** Each job's project, from the one active project source. */
 export interface JobProjects {
-  /** Project per Slurm job ID; a job without a tagged run is missing. */
+  /** Project per row key (`<cluster>/<job id>`); a job without one is missing. */
   readonly byJob: ReadonlyMap<string, string>;
+  /** Why the Unassigned jobs have no project, e.g. `submitted without --project`. */
+  readonly unassignedReason: string;
+  /** The source's name in error rows, e.g. `W&B`. */
+  readonly sourceLabel: string;
   /** Why the last lookup failed; `byJob` then still holds the one before. */
   readonly error: string | undefined;
 }
@@ -134,7 +135,7 @@ export interface JobDetails {
   /** What `git log` needs to list the commits since the previous run; undefined when it can't. */
   changesRequest: { cluster: string; workdir: string; fromCommit: string; toCommit: string } | undefined;
   changes: ChangesState | undefined;
-  training: TrainingState | undefined;
+  addOnLines: AddOnLinesState | undefined;
 }
 
 export interface ReviewCard {
@@ -162,24 +163,15 @@ export function noteReferences(note: string): string[] {
   return [...new Set(note.match(/\b(?:commit:[0-9a-fA-F]{7,40}|job:\d+(?:_\d+)?)\b/g) ?? [])];
 }
 
-export function projectOf(projects: JobProjects, jobId: string): string {
-  return projects.byJob.get(jobId) ?? UNASSIGNED;
-}
-
-/** The IDs of every job in the report, listed or only recorded, to look up their projects. */
-export function listedJobIds(report: JobsReport | undefined): string[] {
-  const jobIds = (report?.clusters ?? []).flatMap((entry) => [
-    ...entry.jobs.map((job) => job.jobid),
-    ...(entry.records_without_job ?? []).map((record) => record.job_id),
-  ]);
-  return [...new Set(jobIds)];
+export function projectOf(projects: JobProjects, cluster: string, jobId: string): string {
+  return projects.byJob.get(rowKey(cluster, jobId)) ?? UNASSIGNED;
 }
 
 /** Jobs per project over every live cluster, for the sidebar and the project filter. */
 export function projectCounts(report: JobsReport | undefined, projects: JobProjects): Map<string, number> {
   const counts = new Map<string, number>();
-  for (const { job } of liveJobs(report)) {
-    const project = projectOf(projects, job.jobid);
+  for (const { entry, job } of liveJobs(report)) {
+    const project = projectOf(projects, entry.cluster, job.jobid);
     counts.set(project, (counts.get(project) ?? 0) + 1);
   }
   return counts;
@@ -206,7 +198,7 @@ export function pendingReviews(
     id: record.job_id,
     name: record.job_name ?? job?.name ?? "job",
     stateLabel: job ? stateLabel(job) : "Not listed",
-    project: projectLabel(projectOf(projects, record.job_id)),
+    project: projectLabel(projectOf(projects, entry.cluster, record.job_id)),
     submittedText: formatTime(record.submitted_at),
     note: record.note ?? "",
     references: noteReferences(record.note ?? ""),
@@ -216,14 +208,15 @@ export function pendingReviews(
 export function buildJobsTable(inputs: TableInputs): JobsTableModel {
   const { statuses, report, filters, projects } = inputs;
   const isInClusterFilter = (cluster: string) => filters.cluster === ALL_CLUSTERS || filters.cluster === cluster;
-  const isInProjectFilter = (job: Job) => filters.project === ALL_PROJECTS || filters.project === projectOf(projects, job.jobid);
+  const isInProjectFilter = ({ entry, job }: LiveJob) =>
+    filters.project === ALL_PROJECTS || filters.project === projectOf(projects, entry.cluster, job.jobid);
   const isShown = (job: Job) => {
     const group = stateGroup(job);
     return group === undefined || filters.shownGroups[group];
   };
 
   const allJobs = liveJobs(report);
-  const filtered = allJobs.filter(({ entry, job }) => isInClusterFilter(entry.cluster) && isInProjectFilter(job));
+  const filtered = allJobs.filter((liveJob) => isInClusterFilter(liveJob.entry.cluster) && isInProjectFilter(liveJob));
   const records = allRecords(report);
   const rows = filtered
     .filter(({ job }) => isShown(job))
@@ -239,7 +232,7 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
     const messages = [entry.error, entry.records_error && `job records: ${entry.records_error}`];
     return messages.flatMap((message) => (message ? [{ cluster: entry.cluster, message }] : []));
   });
-  const wandbErrors = projects.error ? [{ cluster: "W&B", message: `projects: ${projects.error}` }] : [];
+  const projectErrors = projects.error ? [{ cluster: projects.sourceLabel, message: `projects: ${projects.error}` }] : [];
   const counts = projectCounts(report, projects);
   const reviewCards = pendingReviews(report, inputs.reviews, projects);
 
@@ -269,7 +262,7 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
     ],
     groups: groupByProject(rows, filtered, projects),
     lockedClusters,
-    errors: [...clusterErrors, ...wandbErrors],
+    errors: [...clusterErrors, ...projectErrors],
     showEmpty: rows.length === 0 && lockedClusters.length === 0,
     updatedText: inputs.updatedAt ? `Updated ${inputs.updatedAt.toLocaleTimeString()}` : "Loading…",
     pendingCount: reviewCards.length,
@@ -305,7 +298,9 @@ export function sortProjects(projects: string[]): string[] {
 }
 
 function groupByProject(rows: JobRow[], filtered: LiveJob[], projects: JobProjects): JobsTableModel["groups"] {
-  const projectByRow = new Map(filtered.map(({ entry, job }) => [rowKey(entry.cluster, job.jobid), projectOf(projects, job.jobid)]));
+  const projectByRow = new Map(
+    filtered.map(({ entry, job }) => [rowKey(entry.cluster, job.jobid), projectOf(projects, entry.cluster, job.jobid)]),
+  );
   const groups = new Map<string, JobRow[]>();
   for (const row of rows) {
     const project = projectByRow.get(row.key) ?? UNASSIGNED;
@@ -316,7 +311,7 @@ function groupByProject(rows: JobRow[], filtered: LiveJob[], projects: JobProjec
     return {
       project,
       label: projectLabel(project),
-      subtitle: project === UNASSIGNED ? "no W&B run tagged with the job" : `${projectRows.length} shown`,
+      subtitle: project === UNASSIGNED ? projects.unassignedReason : `${projectRows.length} shown`,
       rows: projectRows,
     };
   });
@@ -381,7 +376,7 @@ function details(
 ): JobDetails {
   const record = job.record ?? undefined;
   const code = record?.code;
-  const previous = record ? previousRun(record, records, projects) : undefined;
+  const previous = record ? previousRun({ cluster, record }, records, projects) : undefined;
   const previousJob = previous
     ? allJobs.find(({ entry, job: other }) => entry.cluster === previous.cluster && other.jobid === previous.record.job_id)
     : undefined;
@@ -412,20 +407,20 @@ function details(
         ? { cluster, workdir: code.workdir, fromCommit, toCommit: code.commit }
         : undefined,
     changes: extras?.changes,
-    training: extras?.training,
+    addOnLines: extras?.addOnLines,
   };
 }
 
-/** D10: the latest earlier record with the same W&B project and job name. */
-export function previousRun(record: JobRecord, records: readonly ClusterRecord[], projects: JobProjects): ClusterRecord | undefined {
-  const project = projectOf(projects, record.job_id);
+/** D10: the latest earlier record with the same project and job name. */
+export function previousRun(record: ClusterRecord, records: readonly ClusterRecord[], projects: JobProjects): ClusterRecord | undefined {
+  const project = projectOf(projects, record.cluster, record.record.job_id);
   return records
     .filter(
       (other) =>
-        other.record.job_id !== record.job_id &&
-        projectOf(projects, other.record.job_id) === project &&
-        other.record.job_name === record.job_name &&
-        other.record.submitted_at < record.submitted_at,
+        other.record.job_id !== record.record.job_id &&
+        projectOf(projects, other.cluster, other.record.job_id) === project &&
+        other.record.job_name === record.record.job_name &&
+        other.record.submitted_at < record.record.submitted_at,
     )
     .sort((a, b) => (a.record.submitted_at < b.record.submitted_at ? 1 : -1))[0];
 }

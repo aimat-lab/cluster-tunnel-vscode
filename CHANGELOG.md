@@ -12,18 +12,22 @@ All notable changes to the ctun VS Code extension. The format follows
 - "Cluster jobs" tab from `ctun jobs --json`: one list filtered by state toggles,
   an "Ended in" window and cluster chips; refreshes every 60 s while visible.
 - Status-bar entry with the connected clusters and their budget use.
-- Projects: the table is grouped by each job's W&B project, the project of the
-  run tagged `slurm:<job id>` in any project of the entity; a project filter, and a
-  Projects view with counts. Jobs without a tagged run count as Unassigned, and a
-  tag added later in W&B moves an old job into its project. The record's
-  `--project` is no longer used, and `ctun.wandb.project` is gone.
+- Projects: the table is grouped by project, with a project filter and a
+  Projects view with counts. `ctun.projects.source` picks the source: the job
+  record's `--project` (default) or an add-on's projects. Jobs without one count
+  as Unassigned.
+- Add-ons: an internal interface through which a library adds a project per
+  job, lines in a job's details and a Setup row; each add-on is off by default.
 - Agent notes: the note under each job name, Confirm / Edit / Discard (kept in
   `globalState`, synced by Settings Sync), a "To review" mode with cards, the
   activity-bar badge and the status-bar count.
 - Job details: commit, pushed or not, uncommitted files, submitting machine, the
   previous run of the same job and the commits since it.
-- W&B: the job's run found by its `slurm:<job id>` tag, with epoch, chosen metrics
-  and a link; the API key lives in SecretStorage.
+- W&B add-on (`ctun.addons.wandb.enabled`): the job's run found by its tag
+  `slurm:<ClusterName>:<job id>` (or the older `slurm:<job id>`) in any project
+  of the entity, with epoch, chosen metrics and a link; its project as a project
+  source, so a tag added later in W&B moves an old job into its project. The API
+  key lives in SecretStorage.
 - Native login (`ctun.login.method: vscode`): budget, OTP and password in VS Code
   input boxes, passed to `ctun login --credentials-stdin`.
 - `ctun login -i` from an agent or terminal of a VS Code window asks in that

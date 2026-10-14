@@ -198,19 +198,21 @@
     return box;
   }
 
-  const TRAINING_HELP_LABELS = { setup: "Set up W&B", tagging: "How to tag runs" };
+  /** One add-on line: its text, a link to open and a command that helps. */
+  function addOnDetail(line) {
+    const node = el("span", line.muted ? "muted" : "");
+    node.append(el("span", line.muted ? "" : "mono small", line.text));
+    if (line.link) node.append(" ", button("link-button", `${line.link.label} ↗`, { type: "openUrl", url: line.link.url }));
+    if (line.help) node.append(" ", button("link-button", line.help.label, { type: "runCommand", command: line.help.command }));
+    return node;
+  }
 
-  function trainingDetail(training) {
-    if (!training || training.state === "loading") return el("span", "muted", "Looking up the W&B run…");
-    if (training.state === "unavailable") {
-      const line = el("span", "muted", training.text);
-      if (training.help) line.append(" ", button("link-button", TRAINING_HELP_LABELS[training.help], { type: "trainingHelp", help: training.help }));
-      return line;
+  function addOnDetails(list, addOnLines) {
+    if (addOnLines?.state === "loading") {
+      for (const label of addOnLines.labels) detailItem(list, label, el("span", "muted", "Loading…"));
+    } else if (addOnLines?.state === "loaded") {
+      for (const line of addOnLines.lines) detailItem(list, line.label, addOnDetail(line));
     }
-    const line = el("span", "");
-    line.append(el("span", "mono small", training.text), " ");
-    line.append(button("link-button", "W&B ↗", { type: "openUrl", url: training.url }));
-    return line;
   }
 
   function codeDetail(code) {
@@ -265,10 +267,10 @@
       detailItem(list, "Record", el("span", "muted", "No job record: submitted without ctun run, or before records existed."));
     }
     if (row.note) detailItem(list, "Note", noteDetail(row.note));
-    detailItem(list, "Training", trainingDetail(details.training));
     if (details.code) detailItem(list, "Code", codeDetail(details.code));
     if (details.from) detailItem(list, "From", details.from);
     if (details.previous) detailItem(list, "Changes", changesDetail(row, details));
+    addOnDetails(list, details.addOnLines);
     return fullWidthRow("details-row", list);
   }
 

@@ -1,16 +1,16 @@
 import * as vscode from "vscode";
 import type { ClusterData } from "./clusterData";
 import { ALL_PROJECTS, projectCounts, projectLabel, sortProjects } from "./jobsTable";
-import type { WandbProjects } from "./wandbProjects";
+import type { ProjectLookup } from "./projects";
 
-/** The Projects list under Clusters: job counts per W&B project, a click filters the table. */
+/** The Projects list under Clusters: job counts per project of the active source, a click filters the table. */
 export class ProjectsView implements vscode.TreeDataProvider<string> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
 
   constructor(
     private readonly data: ClusterData,
-    private readonly projects: WandbProjects,
+    private readonly projects: ProjectLookup,
   ) {
     data.onDidChange(() => this.changed.fire());
     projects.onDidChange(() => this.changed.fire());

@@ -54,6 +54,8 @@ export interface Job {
 /** One cluster's entry in `ctun jobs --json`. */
 export interface ClusterJobsEntry {
   cluster: string;
+  /** Slurm's ClusterName, which jobs see as `SLURM_CLUSTER_NAME`; absent from older ctun, null when unknown. */
+  slurm_cluster?: string | null;
   live: boolean;
   error: string | null;
   jobs: Job[];

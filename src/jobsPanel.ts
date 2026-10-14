@@ -1,5 +1,7 @@
 import * as crypto from "crypto";
 import * as vscode from "vscode";
+import type { AddOnRegistry } from "./addOnRegistry";
+import { DetailLine, jobRefs } from "./addOns";
 import type { ClusterData } from "./clusterData";
 import {
   ALL_CLUSTERS,
@@ -11,13 +13,10 @@ import {
   JobsFilters,
   JobsTableModel,
   RowExtras,
-  TrainingHelp,
-  TrainingState,
 } from "./jobsTable";
 import { StateGroupId, stateGroup } from "./jobStates";
+import type { ProjectLookup } from "./projects";
 import type { ReviewStatus, ReviewStore } from "./reviews";
-import type { WandbProjects } from "./wandbProjects";
-import { SETUP_VIEW_ID } from "./setupView";
 
 /** Each refresh runs `sacct` on a login node, so not more often than this. */
 const AUTO_REFRESH_MS = 60_000;
@@ -25,11 +24,11 @@ const AUTO_REFRESH_MS = 60_000;
 /** What the panel needs from the rest of the extension. */
 export interface JobsPanelServices {
   data: ClusterData;
-  projects: WandbProjects;
+  projects: ProjectLookup;
+  addOns: AddOnRegistry;
   reviews: ReviewStore;
   /** Called after a review changed, so the badge and status bar follow. */
   onReviewsChanged: () => void;
-  loadTraining: (jobId: string) => Promise<TrainingState>;
   loadChanges: (cluster: string, workdir: string, fromCommit: string, toCommit: string) => Promise<ChangesState>;
 }
 
@@ -48,12 +47,7 @@ type WebviewMessage =
   | { type: "loadChanges"; key: string }
   | { type: "showJob"; key: string }
   | { type: "openUrl"; url: string }
-  | { type: "trainingHelp"; help: TrainingHelp };
-
-const TRAINING_HELP_COMMANDS: Record<TrainingHelp, string> = {
-  setup: `${SETUP_VIEW_ID}.focus`,
-  tagging: "ctun.showWandbGuide",
-};
+  | { type: "runCommand"; command: string };
 
 /** The "Cluster jobs" editor tab: one list of every live cluster's jobs. */
 export class JobsPanel {
@@ -101,6 +95,7 @@ export class JobsPanel {
       panel.onDidDispose(() => this.dispose()),
       services.data.onDidChange(() => this.post()),
       services.projects.onDidChange(() => this.post()),
+      services.addOns.onDidChange(() => this.reloadAddOnLines()),
     );
     services.data.since = effectiveSince(this.filters);
     this.followVisibility();
@@ -126,7 +121,7 @@ export class JobsPanel {
     const group = this.groupOf(key);
     const shownGroups = group ? { ...this.filters.shownGroups, [group]: true } : this.filters.shownGroups;
     this.setFilters({ ...this.filters, shownGroups, cluster: ALL_CLUSTERS, project: ALL_PROJECTS });
-    void this.loadTraining(key);
+    void this.loadAddOnLines(key);
   }
 
   private async handle(message: WebviewMessage): Promise<void> {
@@ -172,12 +167,14 @@ export class JobsPanel {
         this.revealJob(message.key);
         return;
       case "openUrl":
-        if (message.url.startsWith("https://wandb.ai/")) {
+        if (this.shownAddOnLines().some((line) => line.link?.url === message.url)) {
           void vscode.env.openExternal(vscode.Uri.parse(message.url));
         }
         return;
-      case "trainingHelp":
-        void vscode.commands.executeCommand(TRAINING_HELP_COMMANDS[message.help]);
+      case "runCommand":
+        if (this.shownAddOnLines().some((line) => line.help?.command === message.command)) {
+          void vscode.commands.executeCommand(message.command);
+        }
         return;
     }
   }
@@ -200,7 +197,7 @@ export class JobsPanel {
     }
     this.expanded.add(key);
     this.post();
-    void this.loadTraining(key);
+    void this.loadAddOnLines(key);
   }
 
   private async review(reviewKey: string, action: "confirm" | "edit" | "discard"): Promise<void> {
@@ -235,10 +232,21 @@ export class JobsPanel {
     return job && stateGroup(job);
   }
 
-  private async loadTraining(key: string): Promise<void> {
-    const jobId = key.split("/").slice(1).join("/");
-    this.setExtras(key, { training: { state: "loading" } });
-    this.setExtras(key, { training: await this.services.loadTraining(jobId) });
+  private async loadAddOnLines(key: string): Promise<void> {
+    const { addOns, data } = this.services;
+    const job = jobRefs(data.jobs).find((candidate) => candidate.key === key);
+    const labels = addOns.detailLabels();
+    if (!job || labels.length === 0) {
+      this.setExtras(key, { addOnLines: undefined });
+      return;
+    }
+    this.setExtras(key, { addOnLines: { state: "loading", labels } });
+    this.setExtras(key, { addOnLines: { state: "loaded", lines: await addOns.detailLines(job) } });
+  }
+
+  /** The add-on lines on screen; the webview may only open their links and run their commands. */
+  private shownAddOnLines(): DetailLine[] {
+    return [...this.extras.values()].flatMap(({ addOnLines }) => (addOnLines?.state === "loaded" ? addOnLines.lines : []));
   }
 
   private async loadChanges(key: string): Promise<void> {
@@ -250,6 +258,13 @@ export class JobsPanel {
     this.setExtras(key, { changes: { state: "loading" } });
     const { cluster, workdir, fromCommit, toCommit } = request;
     this.setExtras(key, { changes: await this.services.loadChanges(cluster, workdir, fromCommit, toCommit) });
+  }
+
+  /** An add-on changed, e.g. its key or settings: the open rows ask again. */
+  private reloadAddOnLines(): void {
+    for (const key of this.expanded) {
+      void this.loadAddOnLines(key);
+    }
   }
 
   private setExtras(key: string, update: RowExtras): void {

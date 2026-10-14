@@ -1,38 +1,8 @@
 import * as vscode from "vscode";
-import type { TrainingState } from "./jobsTable";
-import { trainingSummary, WandbClient } from "./wandb";
+import { WandbClient } from "./client";
 
 /** The SecretStorage key of the W&B API key. */
 export const WANDB_KEY_SECRET = "ctun.wandb.apiKey";
-
-/** Looks up a job's W&B run in its project, with the key in SecretStorage and the `ctun.wandb.*` settings. */
-export function trainingLookup(
-  secrets: vscode.SecretStorage,
-  projectOf: (jobId: string) => Promise<string | undefined>,
-): (jobId: string) => Promise<TrainingState> {
-  return async (jobId) => {
-    const settings = vscode.workspace.getConfiguration("ctun.wandb");
-    const apiKey = await secrets.get(WANDB_KEY_SECRET);
-    if (!apiKey) {
-      return { state: "unavailable", text: "W&B not configured.", help: "setup" };
-    }
-    const project = await projectOf(jobId);
-    if (!project) {
-      return { state: "unavailable", text: `No W&B run tagged slurm:${jobId}.`, help: "tagging" };
-    }
-    const entity = settings.get<string>("entity") ?? "";
-    const metrics = settings.get<string[]>("metrics") ?? [];
-    try {
-      const run = await new WandbClient(apiKey).runForJob(entity, project, jobId, metrics);
-      if (!run) {
-        return { state: "unavailable", text: `No W&B run tagged slurm:${jobId}.`, help: "tagging" };
-      }
-      return { state: "loaded", text: trainingSummary(run), url: run.url };
-    } catch (error) {
-      return { state: "unavailable", text: error instanceof Error ? error.message : String(error) };
-    }
-  };
-}
 
 /** Opens the guide to tagging W&B runs with their Slurm job ID, shipped with the extension. */
 export async function showWandbGuide(extensionUri: vscode.Uri): Promise<void> {

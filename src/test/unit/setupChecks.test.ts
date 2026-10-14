@@ -8,7 +8,8 @@ const WORKING: SetupInputs = {
   ctunError: undefined,
   clusterCount: 2,
   loginMethod: "vscode",
-  wandb: { hasKey: true, entity: "" },
+  projects: { source: "record", addOn: undefined },
+  addOnChecks: [{ label: "W&B", health: "off", description: "add-on off" }],
 };
 
 /** Each row as `label: health description`, children indented. */
@@ -24,10 +25,8 @@ test("a working setup is all ok", () => {
     "ctun: ok ctun",
     "Clusters: ok 2 configured",
     "Login: plain VS Code input boxes",
-    "W&B: ok the key's own entity",
-    "  API key: ok stored",
-    "  Entity: plain the key's own",
-    "  Tag runs in the training script: plain how to",
+    "Projects: plain from ctun's --project",
+    "W&B: off add-on off",
   ]);
 });
 
@@ -40,11 +39,9 @@ test("an empty ctun config is broken", () => {
   assert.strictEqual(summary({ ...WORKING, clusterCount: 0 })[1], "Clusters: broken none in the ctun config");
 });
 
-test("W&B without a key is off, not broken", () => {
-  const rows = summary({ ...WORKING, wandb: { hasKey: false, entity: "" } });
-  assert.deepStrictEqual(rows.slice(3, 5), ["W&B: off off; set a key to show projects and runs", "  API key: off missing"]);
-});
-
-test("W&B with a team entity names it", () => {
-  assert.strictEqual(summary({ ...WORKING, wandb: { hasKey: true, entity: "aimat" } })[3], "W&B: ok aimat");
+test("projects from an add-on need that add-on on", () => {
+  const projectsRow = (projects: SetupInputs["projects"]) => summary({ ...WORKING, projects })[3];
+  assert.strictEqual(projectsRow({ source: "wandb", addOn: { label: "W&B", active: true } }), "Projects: ok from W&B");
+  assert.strictEqual(projectsRow({ source: "wandb", addOn: { label: "W&B", active: false } }), "Projects: broken W&B add-on is off");
+  assert.strictEqual(projectsRow({ source: "mlflow", addOn: undefined }), 'Projects: broken no add-on "mlflow"');
 });

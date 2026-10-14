@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { buildJobsTable, DEFAULT_FILTERS, JobsTableModel, RowExtras } from "../../jobsTable";
 import { GUARDED_STATUS, JOBS_REPORT, LOGGED_OUT_STATUS } from "../fixtures/ctunOutput";
-import { JOB_PROJECTS } from "../fixtures/wandbProjects";
+import { JOB_PROJECTS } from "../fixtures/jobProjects";
 
 const RENDERER = fs.readFileSync(path.resolve(__dirname, "../../../media/jobsTable.js"), "utf8");
 
@@ -46,7 +46,7 @@ test("renders project groups, notes and the locked cluster", () => {
   const { app } = render(model());
   const text = app.textContent ?? "";
   assert.match(text, /htfm 3 shown/);
-  assert.match(text, /Unassigned no W&B run tagged with the job/);
+  assert.match(text, /Unassigned submitted without --project/);
   assert.match(text, /unreviewed Rerun of job:91/);
   assert.match(text, /bwuni3 has no tunnel/);
   assert.match(text, /To review · 3/);
@@ -57,7 +57,10 @@ test("renders the details of an expanded job and sends its actions", () => {
     [
       "haicore/101",
       {
-        training: { state: "loaded", text: "epoch 31 · val/loss 0.690", url: "https://wandb.ai/e/p/runs/r" },
+        addOnLines: {
+          state: "loaded",
+          lines: [{ label: "Training", text: "epoch 31 · val/loss 0.690", link: { label: "W&B", url: "https://wandb.ai/e/p/runs/r" } }],
+        },
         changes: { state: "loaded", commits: [{ hash: "87d86d4", message: "Fix paths" }] },
       },
     ],
@@ -77,7 +80,7 @@ test("renders the details of an expanded job and sends its actions", () => {
   const unpushed = details[1].textContent ?? "";
   assert.match(unpushed, /not on remote/);
   assert.match(unpushed, /1 uncommitted files/);
-  assert.match(unpushed, /Looking up the W&B run/);
+  assert.doesNotMatch(unpushed, /Training/);
 
   click("Confirm", details[0]);
   click("W&B ↗", details[0]);
@@ -87,19 +90,17 @@ test("renders the details of an expanded job and sends its actions", () => {
   ]);
 });
 
-test("links an unavailable Training line to its help", () => {
+test("shows the add-ons loading, then a muted line with its help command", () => {
+  const help = { label: "How to tag runs", command: "ctun.showWandbGuide" };
   const extras = new Map<string, RowExtras>([
-    ["haicore/101", { training: { state: "unavailable", text: "W&B not configured.", help: "setup" } }],
-    ["haicore/103", { training: { state: "unavailable", text: "No W&B run tagged slurm:103.", help: "tagging" } }],
+    ["haicore/101", { addOnLines: { state: "loading", labels: ["Training"] } }],
+    ["haicore/103", { addOnLines: { state: "loaded", lines: [{ label: "Training", text: "No W&B run tagged slurm:haic:103.", muted: true, help }] } }],
   ]);
   const { app, sent, click } = render(model({ expanded: ["haicore/101", "haicore/103"], extras }));
   const details = [...app.querySelectorAll(".details-row")];
-  click("Set up W&B", details[0]);
+  assert.match(details[0].textContent ?? "", /TrainingLoading…/);
   click("How to tag runs", details[1]);
-  assert.deepStrictEqual(sent.slice(-2), [
-    { type: "trainingHelp", help: "setup" },
-    { type: "trainingHelp", help: "tagging" },
-  ]);
+  assert.deepStrictEqual(sent.at(-1), { type: "runCommand", command: "ctun.showWandbGuide" });
 });
 
 test("offers to load the commit list before it is loaded", () => {

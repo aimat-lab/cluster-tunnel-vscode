@@ -86,6 +86,11 @@
         "category": "ctun"
       },
       {
+        "command": "ctun.addons.wandb.enable",
+        "title": "Turn On the W&B Add-on",
+        "category": "ctun"
+      },
+      {
         "command": "ctun.setWandbKey",
         "title": "Set W&B API Key",
         "category": "ctun"
@@ -185,12 +190,30 @@
           ],
           "markdownDescription": "How **Log in** asks for the session budget, password and OTP. Also applies to `ctun login -i` run by agents and terminals of this window."
         },
-        "ctun.wandb.entity": {
+        "ctun.projects.source": {
+          "type": "string",
+          "enum": [
+            "record",
+            "wandb"
+          ],
+          "default": "record",
+          "enumDescriptions": [
+            "The `--project` that `ctun run` wrote into the job's record.",
+            "The W&B project of the run tagged with the job (needs the W&B add-on)."
+          ],
+          "markdownDescription": "Where each job's project comes from, for the Projects view, the table's groups and the previous run. Jobs the source names no project for are Unassigned."
+        },
+        "ctun.addons.wandb.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Turn on the W&B add-on: a Training line with the metrics of the job's W&B run, and W&B projects for `#ctun.projects.source#`. Runs are found by their tag `slurm:<ClusterName>:<job id>` or `slurm:<job id>`."
+        },
+        "ctun.addons.wandb.entity": {
           "type": "string",
           "default": "",
-          "markdownDescription": "W&B entity (user or team) whose projects hold the runs tagged `slurm:<job id>`. Empty means the API key's own entity."
+          "markdownDescription": "W&B user or team whose projects are searched for tagged runs (the first 100). Empty means the API key's own entity."
         },
-        "ctun.wandb.metrics": {
+        "ctun.addons.wandb.metrics": {
           "type": "array",
           "items": {
             "type": "string"

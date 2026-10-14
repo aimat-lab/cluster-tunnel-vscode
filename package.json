@@ -86,6 +86,11 @@
         "category": "ctun"
       },
       {
+        "command": "ctun.installSkill",
+        "title": "Install the Claude Code Skill",
+        "category": "ctun"
+      },
+      {
         "command": "ctun.addons.wandb.enable",
         "title": "Turn On the W&B Add-on",
         "category": "ctun"

@@ -159,6 +159,11 @@ export class Ctun {
     return this.json<CommandLog>([...target(cluster), "logs", "--json"]);
   }
 
+  /** ctun's version, e.g. `0.5.0`. */
+  async version(): Promise<string> {
+    return (await this.run(["--version"])).trim();
+  }
+
   info(cluster: string): Promise<ClusterInfo> {
     return this.json<ClusterInfo>([...target(cluster), "info", "--json"]);
   }

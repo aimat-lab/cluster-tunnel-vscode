@@ -17,7 +17,11 @@ straight to ctun's stdin.
   ctun's job record (default), or an add-on such as W&B. Jobs the source names
   no project for are Unassigned.
 - **Setup view** (below Projects): whether ctun is found, how many clusters its
-  config has, the login method, the project source, and one row per add-on. Green is
+  config has, the login method, whether ctun's Claude Code skill is in your global
+  Claude folder (`~/.claude/skills/cluster-tunnel`, or under `CLAUDE_CONFIG_DIR`),
+  the project source, and one row per add-on. A click on the skill row offers to
+  download the skill from GitHub, at the tag of your ctun version, or opens its
+  documentation. Green is
   fine, amber needs fixing, grey is an optional feature that is off. A click
   opens the setting or runs the command that fixes the row.
 - **Cluster jobs** tab: one list of the jobs on every connected cluster, grouped by
@@ -102,6 +106,7 @@ The W&B API key goes in VS Code's SecretStorage: run **ctun: Set W&B API Key**.
 | ctun: Show Cluster Jobs | Clusters view title, the "Jobs" row |
 | ctun: Show Commands Sent | the "Commands" row, Command Palette |
 | ctun: Review Agent Notes | status bar, "To review" button |
+| ctun: Install the Claude Code Skill | Setup view, Command Palette |
 | ctun: Turn On the W&B Add-on | Setup view, Command Palette |
 | ctun: Set / Remove W&B API Key | Setup view, Command Palette |
 | ctun: How to Tag W&B Runs | Setup view, a job's Training line, Command Palette |

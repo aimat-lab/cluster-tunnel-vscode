@@ -4,6 +4,7 @@ import type { ClusterData } from "./clusterData";
 import type { LoginMethod } from "./login";
 import { projectSource } from "./projects";
 import { SetupCheck, SetupHealth, setupChecks } from "./setupChecks";
+import { globalSkillDir, isSkillInstalled } from "./skill";
 
 export const SETUP_VIEW_ID = "ctun.setup";
 
@@ -28,6 +29,11 @@ export class SetupView implements vscode.TreeDataProvider<SetupCheck> {
     vscode.workspace.onDidChangeConfiguration((event) => event.affectsConfiguration("ctun") && this.changed.fire());
   }
 
+  /** Checks every row again, e.g. after the skill was installed. */
+  refresh(): void {
+    this.changed.fire();
+  }
+
   async getChildren(check?: SetupCheck): Promise<SetupCheck[]> {
     if (check !== undefined) {
       return check.children ?? [];
@@ -35,6 +41,7 @@ export class SetupView implements vscode.TreeDataProvider<SetupCheck> {
     const settings = vscode.workspace.getConfiguration("ctun");
     const source = projectSource();
     const sourceAddOn = this.addOns.get(source);
+    const skillDir = globalSkillDir();
     const addOnChecks = await Promise.all(this.addOns.all().flatMap((addOn) => (addOn.setupCheck ? [addOn.setupCheck()] : [])));
     return setupChecks({
       ctunPath: settings.get<string>("path") || "ctun",
@@ -42,6 +49,7 @@ export class SetupView implements vscode.TreeDataProvider<SetupCheck> {
       ctunError: this.data.error,
       clusterCount: this.data.statuses.length,
       loginMethod: settings.get<LoginMethod>("login.method") ?? "vscode",
+      skill: { installed: await isSkillInstalled(skillDir), skillDir },
       projects: { source, addOn: sourceAddOn && { label: sourceAddOn.label, active: sourceAddOn.active } },
       addOnChecks,
     });

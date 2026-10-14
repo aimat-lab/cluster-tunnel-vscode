@@ -14,6 +14,7 @@ import { ProjectLookup } from "./projects";
 import { ProjectsView } from "./projectsView";
 import { REVIEWS_STATE_KEY, ReviewStore } from "./reviews";
 import { SETUP_VIEW_ID, SetupView } from "./setupView";
+import { offerSkillInstall } from "./skillCommand";
 import { createStatusBar } from "./statusBar";
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -28,7 +29,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
   const projectsView = vscode.window.createTreeView("ctun.projects", { treeDataProvider: new ProjectsView(data, projects) });
-  const setupView = vscode.window.createTreeView(SETUP_VIEW_ID, { treeDataProvider: new SetupView(data, addOns) });
+  const setup = new SetupView(data, addOns);
+  const setupView = vscode.window.createTreeView(SETUP_VIEW_ID, { treeDataProvider: setup });
   const updateBadge = () => {
     const pending = pendingCount();
     clustersView.badge = pending > 0 ? { value: pending, tooltip: `${pending} agent notes to review` } : undefined;
@@ -80,6 +82,7 @@ export function activate(context: vscode.ExtensionContext): void {
     createStatusBar(data, pendingCount, reviewsChanged.event),
     vscode.commands.registerCommand("ctun.refresh", () => data.refresh()),
     vscode.commands.registerCommand("ctun.openConfig", () => openConfig(createCtun())),
+    vscode.commands.registerCommand("ctun.installSkill", () => offerSkillInstall(createCtun(), () => setup.refresh())),
     vscode.commands.registerCommand("ctun.showJobs", showJobs),
     vscode.commands.registerCommand("ctun.showCommands", showCommands),
     vscode.commands.registerCommand("ctun.showReviews", () => showJobs().showReviews()),

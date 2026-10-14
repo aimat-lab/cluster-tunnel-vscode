@@ -16,6 +16,10 @@ All notable changes to the ctun VS Code extension. The format follows
   Projects view with counts. `ctun.projects.source` picks the source: the job
   record's `--project` (default) or an add-on's projects. Jobs without one count
   as Unassigned.
+- Setup view: a "Claude skill" row shows whether ctun's skill is in the global
+  Claude folder (`~/.claude`, or `CLAUDE_CONFIG_DIR`). A click offers to install
+  it from GitHub at the tag of the installed ctun (or `main`), or to open its
+  documentation.
 - Add-ons: an internal interface through which a library adds a project per
   job, lines in a job's details and a Setup row; each add-on is off by default.
 - Agent notes: the note under each job name, Confirm / Edit / Discard (kept in

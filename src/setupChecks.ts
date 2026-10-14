@@ -26,6 +26,8 @@ export interface SetupInputs {
   ctunError: { kind: CtunErrorKind; message: string } | undefined;
   clusterCount: number;
   loginMethod: LoginMethod;
+  /** Whether ctun's skill is in the global Claude folder `skillDir`. */
+  skill: { installed: boolean; skillDir: string };
   /** `ctun.projects.source`, and the add-on it names, if registered. */
   projects: { source: string; addOn: { label: string; active: boolean } | undefined };
   /** One row per registered add-on. */
@@ -39,7 +41,7 @@ const LOGIN_METHOD_LABELS: Record<LoginMethod, string> = {
 
 /** The rows of the Setup view, top to bottom. */
 export function setupChecks(inputs: SetupInputs): SetupCheck[] {
-  return [ctunCheck(inputs), clustersCheck(inputs), loginMethodCheck(inputs), projectsCheck(inputs.projects), ...inputs.addOnChecks];
+  return [ctunCheck(inputs), clustersCheck(inputs), loginMethodCheck(inputs), skillCheck(inputs.skill), projectsCheck(inputs.projects), ...inputs.addOnChecks];
 }
 
 function ctunCheck({ ctunPath, refreshed, ctunError }: SetupInputs): SetupCheck {
@@ -74,6 +76,17 @@ function loginMethodCheck({ loginMethod }: SetupInputs): SetupCheck {
     icon: "key",
     description: LOGIN_METHOD_LABELS[loginMethod],
     fix: { kind: "setting", id: "ctun.login.method" },
+  };
+}
+
+/** The skill is optional: ctun works without Claude Code, so a missing one is grey, not amber. */
+function skillCheck({ installed, skillDir }: SetupInputs["skill"]): SetupCheck {
+  return {
+    label: "Claude skill",
+    health: installed ? "ok" : "off",
+    description: installed ? "installed" : "not installed",
+    tooltip: skillDir,
+    fix: { kind: "command", command: "ctun.installSkill" },
   };
 }
 

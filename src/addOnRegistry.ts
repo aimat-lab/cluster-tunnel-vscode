@@ -18,10 +18,6 @@ export class AddOnRegistry implements vscode.Disposable {
     });
   }
 
-  get(id: string): AddOn | undefined {
-    return this.addOns.get(id);
-  }
-
   all(): AddOn[] {
     return [...this.addOns.values()];
   }

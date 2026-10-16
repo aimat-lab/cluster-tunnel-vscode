@@ -1,5 +1,4 @@
 import type { CtunErrorKind } from "./ctun";
-import { RECORD_SOURCE } from "./jobsTable";
 import type { LoginMethod } from "./login";
 
 /** `off`: an optional feature nobody set up; `broken`: needs fixing before it works; `plain`: a preference or a link, with no state to check. */
@@ -28,8 +27,6 @@ export interface SetupInputs {
   loginMethod: LoginMethod;
   /** Whether ctun's skill is in the global Claude folder `skillDir`. */
   skill: { installed: boolean; skillDir: string };
-  /** `ctun.projects.source`, and the add-on it names, if registered. */
-  projects: { source: string; addOn: { label: string; active: boolean } | undefined };
   /** One row per registered add-on. */
   addOnChecks: SetupCheck[];
 }
@@ -41,7 +38,7 @@ const LOGIN_METHOD_LABELS: Record<LoginMethod, string> = {
 
 /** The rows of the Setup view, top to bottom. */
 export function setupChecks(inputs: SetupInputs): SetupCheck[] {
-  return [ctunCheck(inputs), clustersCheck(inputs), loginMethodCheck(inputs), skillCheck(inputs.skill), projectsCheck(inputs.projects), ...inputs.addOnChecks];
+  return [ctunCheck(inputs), clustersCheck(inputs), loginMethodCheck(inputs), skillCheck(inputs.skill), ...inputs.addOnChecks];
 }
 
 function ctunCheck({ ctunPath, refreshed, ctunError }: SetupInputs): SetupCheck {
@@ -88,18 +85,4 @@ function skillCheck({ installed, skillDir }: SetupInputs["skill"]): SetupCheck {
     tooltip: skillDir,
     fix: { kind: "command", command: "ctun.installSkill" },
   };
-}
-
-function projectsCheck({ source, addOn }: SetupInputs["projects"]): SetupCheck {
-  const fix: SetupFix = { kind: "setting", id: "ctun.projects.source" };
-  if (source === RECORD_SOURCE) {
-    return { label: "Projects", health: "plain", icon: "folder", description: "from ctun's --project", fix };
-  }
-  if (!addOn) {
-    return { label: "Projects", health: "broken", description: `no add-on "${source}"`, fix };
-  }
-  if (!addOn.active) {
-    return { label: "Projects", health: "broken", description: `${addOn.label} add-on is off`, fix };
-  }
-  return { label: "Projects", health: "ok", description: `from ${addOn.label}`, fix };
 }

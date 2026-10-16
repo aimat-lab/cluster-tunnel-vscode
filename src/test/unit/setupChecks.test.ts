@@ -9,7 +9,6 @@ const WORKING: SetupInputs = {
   clusterCount: 2,
   loginMethod: "vscode",
   skill: { installed: true, skillDir: "home/.claude/skills/cluster-tunnel" },
-  projects: { source: "record", addOn: undefined },
   addOnChecks: [{ label: "W&B", health: "off", description: "add-on off" }],
 };
 
@@ -27,7 +26,6 @@ test("a working setup is all ok", () => {
     "Clusters: ok 2 configured",
     "Login: plain VS Code input boxes",
     "Claude skill: ok installed",
-    "Projects: plain from ctun's --project",
     "W&B: off add-on off",
   ]);
 });
@@ -44,11 +42,4 @@ test("an empty ctun config is broken", () => {
 test("a missing Claude skill is off, not broken, and offers the install", () => {
   const skill = setupChecks({ ...WORKING, skill: { installed: false, skillDir: "d" } })[3];
   assert.deepStrictEqual([skill.health, skill.description, skill.fix], ["off", "not installed", { kind: "command", command: "ctun.installSkill" }]);
-});
-
-test("projects from an add-on need that add-on on", () => {
-  const projectsRow = (projects: SetupInputs["projects"]) => summary({ ...WORKING, projects })[4];
-  assert.strictEqual(projectsRow({ source: "wandb", addOn: { label: "W&B", active: true } }), "Projects: ok from W&B");
-  assert.strictEqual(projectsRow({ source: "wandb", addOn: { label: "W&B", active: false } }), "Projects: broken W&B add-on is off");
-  assert.strictEqual(projectsRow({ source: "mlflow", addOn: undefined }), 'Projects: broken no add-on "mlflow"');
 });

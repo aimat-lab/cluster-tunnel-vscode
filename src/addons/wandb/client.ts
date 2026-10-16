@@ -14,10 +14,8 @@ export interface TaggedRun {
   displayName: string;
   state: string;
   tags: string[];
-  /** The run's group (`wandb.init(group=…)`); null without one. */
-  group: string | null;
   url: string;
-  /** The run's summary metrics; empty unless asked for. */
+  /** The run's summary metrics. */
   summary: Record<string, unknown>;
 }
 
@@ -46,7 +44,7 @@ export class WandbClient {
    * The runs in any project of `entity` that carry one of `tags`. `entity` empty means the key's own.
    * Two requests: the entity's projects, then every project's tagged runs at once.
    */
-  async taggedRuns(entity: string, tags: readonly string[], withSummary: boolean): Promise<TaggedRun[]> {
+  async taggedRuns(entity: string, tags: readonly string[]): Promise<TaggedRun[]> {
     if (tags.length === 0) {
       return [];
     }
@@ -56,7 +54,7 @@ export class WandbClient {
       return [];
     }
     const projectVariables = Object.fromEntries(projects.map((name, index) => [`project${index}`, name]));
-    const data = (await this.query(taggedRunsQuery(projects.length, withSummary), {
+    const data = (await this.query(taggedRunsQuery(projects.length), {
       entity: owner,
       filters: JSON.stringify({ tags: { $in: tags } }),
       first: tags.length,
@@ -69,7 +67,6 @@ export class WandbClient {
         displayName: node.displayName,
         state: node.state,
         tags: node.tags ?? [],
-        group: node.group || null,
         url: `https://wandb.ai/${encodeURIComponent(owner)}/${encodeURIComponent(project)}/runs/${encodeURIComponent(node.name)}`,
         summary: parseSummary(node.summaryMetrics),
       })),
@@ -117,14 +114,13 @@ interface RunNode {
   displayName: string;
   state: string;
   tags: string[] | null;
-  group: string | null;
-  summaryMetrics?: string | null;
+  summaryMetrics: string | null;
 }
 
 /** One `runs` lookup per project, aliased `project0`, `project1`, …, so one request covers them all. */
-function taggedRunsQuery(projectCount: number, withSummary: boolean): string {
+function taggedRunsQuery(projectCount: number): string {
   const indexes = [...Array(projectCount).keys()];
-  const runFields = `name displayName state tags group${withSummary ? " summaryMetrics" : ""}`;
+  const runFields = "name displayName state tags summaryMetrics";
   const projectVariables = indexes.map((index) => `$project${index}: String!`).join(", ");
   const projectFields = indexes.map(
     (index) =>
@@ -137,7 +133,7 @@ ${projectFields.join("\n")}
 }`;
 }
 
-function parseSummary(summaryMetrics: string | null | undefined): Record<string, unknown> {
+function parseSummary(summaryMetrics: string | null): Record<string, unknown> {
   try {
     return summaryMetrics ? (JSON.parse(summaryMetrics) as Record<string, unknown>) : {};
   } catch {

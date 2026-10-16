@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import type { ClusterData } from "./clusterData";
 import type { HiddenProjects } from "./hiddenProjects";
 import { bandLabel, projectCounts, projectLabel, sortProjects } from "./jobsTable";
-import type { ProjectLookup } from "./projects";
 import { isHiddenBy, parentProject, totalsWithNested } from "./projectTree";
 
 /** The "All projects" row; `\0` is never part of a project name. */
@@ -20,11 +19,9 @@ export class ProjectsView implements vscode.TreeDataProvider<string> {
 
   constructor(
     private readonly data: ClusterData,
-    private readonly projects: ProjectLookup,
     private readonly hiddenProjects: HiddenProjects,
   ) {
     data.onDidChange(() => this.changed.fire());
-    projects.onDidChange(() => this.changed.fire());
     hiddenProjects.onDidChange(() => this.changed.fire());
   }
 
@@ -42,7 +39,7 @@ export class ProjectsView implements vscode.TreeDataProvider<string> {
 
   private allProjectsItem(): vscode.TreeItem {
     const item = new vscode.TreeItem("All projects");
-    const allJobs = [...projectCounts(this.data.jobs, this.projects).values()].reduce((sum, count) => sum + count, 0);
+    const allJobs = [...projectCounts(this.data.jobs).values()].reduce((sum, count) => sum + count, 0);
     item.description = String(allJobs);
     item.iconPath = new vscode.ThemeIcon("list-flat");
     item.tooltip = "Show every project";
@@ -74,6 +71,6 @@ export class ProjectsView implements vscode.TreeDataProvider<string> {
 
   /** Jobs per project, counting those in nested projects too. */
   private totals(): Map<string, number> {
-    return totalsWithNested(projectCounts(this.data.jobs, this.projects));
+    return totalsWithNested(projectCounts(this.data.jobs));
   }
 }

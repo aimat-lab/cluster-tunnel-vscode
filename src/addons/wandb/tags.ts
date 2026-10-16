@@ -23,16 +23,6 @@ export function runForJob<Run extends Pick<TaggedRun, "tags">>(job: TaggedJob, r
   return undefined;
 }
 
-/** The project of each job that has a tagged run, by `JobRef.key`: `<project>/<run group>`, or the project without a group. */
-export function projectsByJob(jobs: readonly JobRef[], runs: readonly TaggedRun[]): Map<string, string> {
-  return new Map(
-    jobs.flatMap((job) => {
-      const run = runForJob(job, runs);
-      return run ? [[job.key, run.group ? `${run.project}/${run.group}` : run.project]] : [];
-    }),
-  );
-}
-
 /** `epoch 31 · val/loss 0.691 · val/mae_T_trans 38.3`; `running, no metrics yet` without either. */
 export function trainingSummary(run: Pick<TaggedRun, "state" | "summary">, metricNames: readonly string[]): string {
   const parts = typeof run.summary.epoch === "number" ? [`epoch ${run.summary.epoch}`] : [];

@@ -11,7 +11,6 @@ import { pendingReviews } from "./jobsTable";
 import { LoginMethod, logIn, logOut } from "./login";
 import { BRIDGE_VARIABLE, LoginAnswer, startLoginBridge } from "./loginBridge";
 import { HIDDEN_PROJECTS_STATE_KEY, HiddenProjects } from "./hiddenProjects";
-import { ProjectLookup } from "./projects";
 import { ProjectsView } from "./projectsView";
 import { REVIEWS_STATE_KEY, ReviewStore } from "./reviews";
 import { SETUP_VIEW_ID, SetupView } from "./setupView";
@@ -21,16 +20,15 @@ import { createStatusBar } from "./statusBar";
 export function activate(context: vscode.ExtensionContext): void {
   const data = new ClusterData(createCtun);
   const addOns = new AddOnRegistry();
-  const projects = new ProjectLookup(data, addOns);
   const reviews = new ReviewStore(context.globalState);
   const hiddenProjects = new HiddenProjects(context.globalState);
   // D8: reviews live in globalState, which Settings Sync carries to the user's other machines; so do hidden projects.
   context.globalState.setKeysForSync([REVIEWS_STATE_KEY, HIDDEN_PROJECTS_STATE_KEY]);
   const reviewsChanged = new vscode.EventEmitter<void>();
-  const pendingCount = () => pendingReviews(data.jobs, reviews.all(), projects).length;
+  const pendingCount = () => pendingReviews(data.jobs, reviews.all()).length;
 
   const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
-  const projectTree = new ProjectsView(data, projects, hiddenProjects);
+  const projectTree = new ProjectsView(data, hiddenProjects);
   const projectsView = vscode.window.createTreeView("ctun.projects", { treeDataProvider: projectTree });
   const setup = new SetupView(data, addOns);
   const setupView = vscode.window.createTreeView(SETUP_VIEW_ID, { treeDataProvider: setup });
@@ -55,7 +53,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const services: JobsPanelServices = {
     data,
-    projects,
     hiddenProjects,
     addOns,
     reviews,
@@ -78,7 +75,6 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     data,
     addOns,
-    projects,
     hiddenProjects,
     clustersView,
     projectsView,

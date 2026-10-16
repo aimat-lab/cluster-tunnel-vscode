@@ -19,19 +19,17 @@ All notable changes to the ctun VS Code extension. The format follows
   A click on a job row opens its details; the Details button is gone.
 - Projects: the table is grouped by project, and a Projects view shows the
   counts. Its eyes hide projects from the table, a project's eye also hiding the
-  ones nested in it; hidden projects are kept in `globalState`. `ctun.projects.source` picks the source: the job
-  record's `--project` (default) or an add-on's projects. Jobs without one count
-  as Unassigned. A `/` nests projects (`htfm/multihead`): the table shows one
+  ones nested in it; hidden projects are kept in `globalState`. The project is the job
+  record's `--project`; jobs without one count as Unassigned. A `/` nests projects (`htfm/multihead`): the table shows one
   indented band per level with a fold arrow and the jobs below it, the Projects
   view is a tree; a click on a name opens the job list with only that project
-  and the ones below it. The W&B
-  add-on nests a run's group below its project.
+  and the ones below it.
 - Setup view: a "Claude skill" row shows whether ctun's skill is in the global
   Claude folder (`~/.claude`, or `CLAUDE_CONFIG_DIR`). A click offers to install
   it from GitHub at the tag of the installed ctun (or `main`), or to open its
   documentation.
-- Add-ons: an internal interface through which a library adds a project per
-  job, lines in a job's details and a Setup row; each add-on is off by default.
+- Add-ons: an internal interface through which a library adds lines in a
+  job's details and a Setup row; each add-on is off by default.
 - Agent notes: the note under each job name, Confirm / Edit / Discard (kept in
   `globalState`, synced by Settings Sync), a "To review" mode with cards, the
   activity-bar badge and the status-bar count.
@@ -39,9 +37,8 @@ All notable changes to the ctun VS Code extension. The format follows
   previous run of the same job and the commits since it.
 - W&B add-on (`ctun.addons.wandb.enabled`): the job's run found by its tag
   `slurm:<ClusterName>:<job id>` (or the older `slurm:<job id>`) in any project
-  of the entity, with epoch, chosen metrics and a link; its project as a project
-  source, so a tag added later in W&B moves an old job into its project. The API
-  key lives in SecretStorage.
+  of the entity, with epoch, chosen metrics and a link. The API key lives in
+  SecretStorage.
 - Native login (`ctun.login.method: vscode`): budget, OTP and password in VS Code
   input boxes, passed to `ctun login --credentials-stdin`.
 - `ctun login -i` from an agent or terminal of a VS Code window asks in that

@@ -1,11 +1,9 @@
 # Tag W&B runs with their Slurm job
 
 The W&B add-on shows a Training line in a job's details: the epoch, the
-metrics from `ctun.addons.wandb.metrics` and a link to the run. With
-`ctun.projects.source` set to `wandb`, the job's project is the W&B project of
-that run, and a run group (`wandb.init(group=...)`) nests below it: a run in
-group `lr-sweep` of project `htfm` belongs to `htfm › lr-sweep`. To find the
-run, the add-on looks for the tag `slurm:<ClusterName>:<job id>` in every
+metrics from `ctun.addons.wandb.metrics` and a link to the run. The job's
+project stays the `--project` you gave `ctun run`; W&B does not change it. Name
+your W&B projects to match your ctun projects yourself. To find the run, the add-on looks for the tag `slurm:<ClusterName>:<job id>` in every
 project of the entity, for example `slurm:haic:4821937`. Your training script
 must add that tag. The extension cannot read the script, so it cannot check
 this for you.
@@ -72,16 +70,13 @@ In the **Setup** view of the ctun sidebar:
 - **Entity**: set `ctun.addons.wandb.entity` only if the projects belong to a
   team or another user. Empty means the API key's own entity. The add-on
   searches the entity's first 100 projects.
-- **Projects**: set `ctun.projects.source` to `wandb` to group the jobs by
-  their W&B project.
 
 Then collapse and expand a job in the Cluster jobs tab to look up its run again.
 
 ## 4. Tag a job afterwards
 
-With W&B as the project source, a job whose run has no tag shows as
-Unassigned. To move it into its project, add the tag
-`slurm:<ClusterName>:<job id>` to the run in W&B: open the run, and add the tag
+A job whose run has no tag shows "No W&B run tagged" in its Training line. To
+link it, add the tag `slurm:<ClusterName>:<job id>` to the run in W&B: open the run, and add the tag
 under **Overview** → **Tags**. With the W&B Python API:
 
 ```python
@@ -92,5 +87,4 @@ run.tags = [*run.tags, "slurm:haic:4821937"]
 run.update()
 ```
 
-The job moves into the run's project at the next refresh of the Cluster jobs
-tab.
+Collapse and expand the job in the Cluster jobs tab to see its Training line.

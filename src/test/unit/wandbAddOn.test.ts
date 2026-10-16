@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { JobRef } from "../../addOns";
 import { FetchLike, TaggedRun, WandbClient } from "../../addons/wandb/client";
 import { wandbSetupCheck } from "../../addons/wandb/setup";
-import { jobTags, projectsByJob, runForJob, trainingSummary } from "../../addons/wandb/tags";
+import { jobTags, runForJob, trainingSummary } from "../../addons/wandb/tags";
 
 /** A W&B GraphQL endpoint with two projects that answers from fixtures and records the requests. */
 function fakeWandb(runsByProject: Record<string, unknown[]>) {
@@ -31,26 +31,24 @@ const RESUMED_RUN = {
   displayName: "2026-10-12_1319_lr1e-3_k3x9p2qa",
   state: "running",
   tags: ["slurm:4821937", "slurm:haic:4821990", "baseline"],
-  group: "lr-sweep",
   summaryMetrics: JSON.stringify({ epoch: 31, "val/loss": 0.6912, "val/mae_T_trans": 38.27, "val/accuracy": 0.916 }),
 };
 
-function job(jobId: string, slurmCluster: string | null = "haic", cluster = "haicore"): JobRef {
-  return { key: `${cluster}/${jobId}`, cluster, slurmCluster, jobId, name: "train", state: "RUNNING", record: null };
+function job(jobId: string, slurmCluster: string | null = "haic"): JobRef {
+  return { key: `haicore/${jobId}`, cluster: "haicore", slurmCluster, jobId, name: "train", state: "RUNNING", record: null };
 }
 
-function run(project: string, tags: string[], group: string | null = null): TaggedRun {
-  return { project, name: "r", displayName: "r", state: "running", tags, group, url: "", summary: {} };
+function run(project: string, tags: string[]): TaggedRun {
+  return { project, name: "r", displayName: "r", state: "running", tags, url: "", summary: {} };
 }
 
 test("searches every project of the entity for tagged runs in one request", async () => {
   const { fetchFn, requests } = fakeWandb({ htfm_multihead: [RESUMED_RUN], sweeps: [] });
-  const runs = await new WandbClient("key123", fetchFn).taggedRuns("", ["slurm:haic:4821990", "slurm:4821990"], true);
+  const runs = await new WandbClient("key123", fetchFn).taggedRuns("", ["slurm:haic:4821990", "slurm:4821990"]);
 
   assert.deepStrictEqual(runs.map((found) => [found.project, found.name]), [["htfm_multihead", "k3x9p2qa"]]);
   assert.strictEqual(runs[0].url, "https://wandb.ai/example-user/htfm_multihead/runs/k3x9p2qa");
   assert.strictEqual(runs[0].summary.epoch, 31);
-  assert.strictEqual(runs[0].group, "lr-sweep");
 
   const runsQuery = requests.at(-1)!;
   assert.strictEqual(requests.length, 3); // the key's own entity, its projects, the runs
@@ -63,13 +61,10 @@ test("searches every project of the entity for tagged runs in one request", asyn
   assert.strictEqual(runsQuery.authorization, `Basic ${Buffer.from("api:key123").toString("base64")}`);
 });
 
-test("asks for summaries only when told to, and nothing without tags", async () => {
+test("asks W&B nothing without tags", async () => {
   const { fetchFn, requests } = fakeWandb({ p: [] });
-  const client = new WandbClient("k", fetchFn);
-  await client.taggedRuns("team", ["slurm:1"], false);
-  assert.doesNotMatch(requests.at(-1)!.query, /summaryMetrics/);
-  assert.deepStrictEqual(await client.taggedRuns("team", [], true), []);
-  assert.strictEqual(requests.length, 2);
+  assert.deepStrictEqual(await new WandbClient("k", fetchFn).taggedRuns("team", []), []);
+  assert.strictEqual(requests.length, 0);
 });
 
 test("a key W&B rejects fails with a plain message", async () => {
@@ -93,12 +88,6 @@ test("the run with the cluster tag wins over one with the bare tag", () => {
   assert.strictEqual(runForJob(job("7"), [bare, qualified]), qualified);
   assert.strictEqual(runForJob(job("7"), [bare]), bare);
   assert.strictEqual(runForJob(job("7", "horeka"), [qualified]), undefined);
-});
-
-test("maps each job with a tagged run to the run's project and group, by row key", () => {
-  const jobs = [job("7"), job("7", "hk", "horeka"), job("8")];
-  const runs = [run("htfm", ["slurm:haic:7"], "lr-sweep"), run("sweeps", ["slurm:hk:7"])];
-  assert.deepStrictEqual([...projectsByJob(jobs, runs)], [["haicore/7", "htfm/lr-sweep"], ["horeka/7", "sweeps"]]);
 });
 
 test("summarizes the epoch and the chosen metrics", () => {

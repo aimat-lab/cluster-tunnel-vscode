@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import type { AddOnRegistry } from "./addOnRegistry";
 import type { ClusterData } from "./clusterData";
 import type { LoginMethod } from "./login";
-import { projectSource } from "./projects";
 import { SetupCheck, SetupHealth, setupChecks } from "./setupChecks";
 import { globalSkillDir, isSkillInstalled } from "./skill";
 
@@ -39,8 +38,6 @@ export class SetupView implements vscode.TreeDataProvider<SetupCheck> {
       return check.children ?? [];
     }
     const settings = vscode.workspace.getConfiguration("ctun");
-    const source = projectSource();
-    const sourceAddOn = this.addOns.get(source);
     const skillDir = globalSkillDir();
     const addOnChecks = await Promise.all(this.addOns.all().flatMap((addOn) => (addOn.setupCheck ? [addOn.setupCheck()] : [])));
     return setupChecks({
@@ -50,7 +47,6 @@ export class SetupView implements vscode.TreeDataProvider<SetupCheck> {
       clusterCount: this.data.statuses.length,
       loginMethod: settings.get<LoginMethod>("login.method") ?? "vscode",
       skill: { installed: await isSkillInstalled(skillDir), skillDir },
-      projects: { source, addOn: sourceAddOn && { label: sourceAddOn.label, active: sourceAddOn.active } },
       addOnChecks,
     });
   }

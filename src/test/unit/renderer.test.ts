@@ -5,7 +5,6 @@ import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { buildJobsTable, DEFAULT_FILTERS, DEFAULT_SORT, JobsSort, JobsTableModel, RowExtras } from "../../jobsTable";
 import { GUARDED_STATUS, JOBS_REPORT, LOGGED_OUT_STATUS } from "../fixtures/ctunOutput";
-import { JOB_PROJECTS } from "../fixtures/jobProjects";
 
 const RENDERER = fs.readFileSync(path.resolve(__dirname, "../../../media/jobsTable.js"), "utf8");
 
@@ -39,7 +38,6 @@ function model(
   return buildJobsTable({
     statuses: [GUARDED_STATUS, LOGGED_OUT_STATUS],
     report: JOBS_REPORT,
-    projects: JOB_PROJECTS,
     loggingIn: new Set(),
     filters: DEFAULT_FILTERS,
     updatedAt: undefined,

@@ -230,23 +230,10 @@
           ],
           "markdownDescription": "How **Log in** asks for the session budget, password and OTP. Also applies to `ctun login -i` run by agents and terminals of this window."
         },
-        "ctun.projects.source": {
-          "type": "string",
-          "enum": [
-            "record",
-            "wandb"
-          ],
-          "default": "record",
-          "enumDescriptions": [
-            "The `--project` that `ctun run` wrote into the job's record.",
-            "The W&B project of the run tagged with the job (needs the W&B add-on)."
-          ],
-          "markdownDescription": "Where each job's project comes from, for the Projects view, the table's groups and the previous run. Jobs the source names no project for are Unassigned."
-        },
         "ctun.addons.wandb.enabled": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Turn on the W&B add-on: a Training line with the metrics of the job's W&B run, and W&B projects for `#ctun.projects.source#`. Runs are found by their tag `slurm:<ClusterName>:<job id>` or `slurm:<job id>`."
+          "markdownDescription": "Turn on the W&B add-on: a Training line with the metrics of the job's W&B run. Runs are found by their tag `slurm:<ClusterName>:<job id>` or `slurm:<job id>`."
         },
         "ctun.addons.wandb.entity": {
           "type": "string",

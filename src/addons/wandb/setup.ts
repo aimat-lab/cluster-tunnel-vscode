@@ -9,7 +9,7 @@ export function wandbSetupCheck({ enabled, hasKey, entity }: { enabled: boolean;
       label: "W&B",
       health: "off",
       description: "add-on off",
-      tooltip: "Turn on the W&B add-on: projects and training metrics from runs tagged with their Slurm job",
+      tooltip: "Turn on the W&B add-on: training metrics from runs tagged with their Slurm job",
       fix: { kind: "command", command: ENABLE_COMMAND },
     };
   }

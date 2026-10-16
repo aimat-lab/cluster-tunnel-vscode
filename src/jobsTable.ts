@@ -1,7 +1,16 @@
 import type { DetailLine } from "./addOns";
 import type { ClusterJobsEntry, ClusterStatus, Job, JobRecord, JobsReport } from "./ctun";
 import { baseState, STATE_GROUPS, StateGroupId, stateGroup } from "./jobStates";
-import { isHiddenBy, leafName, nestingDepth, PROJECT_SEPARATOR, selfAndAncestors, totalsWithNested, treeOrder } from "./projectTree";
+import {
+  isHiddenBy,
+  leafName,
+  nestingDepth,
+  normalizeProject,
+  PROJECT_SEPARATOR,
+  selfAndAncestors,
+  totalsWithNested,
+  treeOrder,
+} from "./projectTree";
 import { Review, reviewKey } from "./reviews";
 
 export const SINCE_OPTIONS = [
@@ -28,9 +37,7 @@ export type JobsSort = { column: ColumnId; direction: SortDirection };
 export const DEFAULT_SORT: JobsSort = { column: "start", direction: "descending" };
 
 export const ALL_CLUSTERS = "all";
-/** The `ctun.projects.source` value that takes projects from ctun's `--project`. */
-export const RECORD_SOURCE = "record";
-/** The project of a job its project source names none for. */
+/** The project of a job submitted without `--project`, or without a record. */
 export const UNASSIGNED = "unassigned";
 const FINISHED_GROUPS: readonly StateGroupId[] = ["completed", "failed", "cancelled"];
 const SHORT_COMMIT_LENGTH = 7;
@@ -66,22 +73,9 @@ export interface RowExtras {
   changes?: ChangesState;
 }
 
-/** Each job's project, from the one active project source. */
-export interface JobProjects {
-  /** Project per row key (`<cluster>/<job id>`); a job without one is missing. */
-  readonly byJob: ReadonlyMap<string, string>;
-  /** Why the Unassigned jobs have no project, e.g. `submitted without --project`. */
-  readonly unassignedReason: string;
-  /** The source's name in error rows, e.g. `W&B`. */
-  readonly sourceLabel: string;
-  /** Why the last lookup failed; `byJob` then still holds the one before. */
-  readonly error: string | undefined;
-}
-
 export interface TableInputs {
   statuses: readonly ClusterStatus[];
   report: JobsReport | undefined;
-  projects: JobProjects;
   loggingIn: ReadonlySet<string>;
   filters: JobsFilters;
   updatedAt: Date | undefined;
@@ -197,26 +191,23 @@ export function noteReferences(note: string): string[] {
   return [...new Set(note.match(/\b(?:commit:[0-9a-fA-F]{7,40}|job:\d+(?:_\d+)?)\b/g) ?? [])];
 }
 
-export function projectOf(projects: JobProjects, cluster: string, jobId: string): string {
-  return projects.byJob.get(rowKey(cluster, jobId)) ?? UNASSIGNED;
+/** The record's `--project` with `/` as the only level separator. */
+export function projectOf(record: JobRecord | null | undefined): string {
+  return normalizeProject(record?.project ?? "") || UNASSIGNED;
 }
 
 /** Jobs per project over every live cluster, for the sidebar and the project filter. */
-export function projectCounts(report: JobsReport | undefined, projects: JobProjects): Map<string, number> {
+export function projectCounts(report: JobsReport | undefined): Map<string, number> {
   const counts = new Map<string, number>();
-  for (const { entry, job } of liveJobs(report)) {
-    const project = projectOf(projects, entry.cluster, job.jobid);
+  for (const { job } of liveJobs(report)) {
+    const project = projectOf(job.record);
     counts.set(project, (counts.get(project) ?? 0) + 1);
   }
   return counts;
 }
 
 /** Notes no human has confirmed, edited or discarded yet, newest first. */
-export function pendingReviews(
-  report: JobsReport | undefined,
-  reviews: Readonly<Record<string, Review>>,
-  projects: JobProjects,
-): ReviewCard[] {
+export function pendingReviews(report: JobsReport | undefined, reviews: Readonly<Record<string, Review>>): ReviewCard[] {
   const pending = (report?.clusters ?? []).flatMap((entry) => {
     const listed = entry.jobs.flatMap((job) => (job.record ? [{ record: job.record, job: job as Job | undefined }] : []));
     const unlisted = (entry.records_without_job ?? []).map((record) => ({ record, job: undefined }));
@@ -232,7 +223,7 @@ export function pendingReviews(
     id: record.job_id,
     name: record.job_name ?? job?.name ?? "job",
     stateLabel: job ? stateLabel(job) : "Not listed",
-    project: projectLabel(projectOf(projects, entry.cluster, record.job_id)),
+    project: projectLabel(projectOf(record)),
     submittedText: formatTime(record.submitted_at),
     note: record.note ?? "",
     references: noteReferences(record.note ?? ""),
@@ -240,9 +231,9 @@ export function pendingReviews(
 }
 
 export function buildJobsTable(inputs: TableInputs): JobsTableModel {
-  const { statuses, report, filters, projects } = inputs;
+  const { statuses, report, filters } = inputs;
   const isInClusterFilter = (cluster: string) => filters.cluster === ALL_CLUSTERS || filters.cluster === cluster;
-  const isInShownProject = ({ entry, job }: LiveJob) => !isHiddenBy(projectOf(projects, entry.cluster, job.jobid), inputs.hiddenProjects);
+  const isInShownProject = ({ job }: LiveJob) => !isHiddenBy(projectOf(job.record), inputs.hiddenProjects);
   const isShown = (job: Job) => {
     const group = stateGroup(job);
     return group === undefined || filters.shownGroups[group];
@@ -265,8 +256,7 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
     const messages = [entry.error, entry.records_error && `job records: ${entry.records_error}`];
     return messages.flatMap((message) => (message ? [{ cluster: entry.cluster, message }] : []));
   });
-  const projectErrors = projects.error ? [{ cluster: projects.sourceLabel, message: `projects: ${projects.error}` }] : [];
-  const reviewCards = pendingReviews(report, inputs.reviews, projects);
+  const reviewCards = pendingReviews(report, inputs.reviews);
 
   return {
     mode: inputs.mode,
@@ -287,9 +277,9 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
       label: id === ALL_CLUSTERS ? "All clusters" : id,
       pressed: filters.cluster === id,
     })),
-    groups: projectBands(rows, filtered, projects, inputs.collapsedProjects),
+    groups: projectBands(rows, filtered, inputs.collapsedProjects),
     lockedClusters,
-    errors: [...clusterErrors, ...projectErrors],
+    errors: clusterErrors,
     showEmpty: rows.length === 0 && lockedClusters.length === 0,
     updatedText: inputs.updatedAt ? `Updated ${inputs.updatedAt.toLocaleTimeString()}` : "Loading…",
     pendingCount: reviewCards.length,
@@ -366,15 +356,8 @@ export function sortProjects(projects: Iterable<string>): string[] {
   return treeOrder(projects, UNASSIGNED);
 }
 
-function projectBands(
-  rows: JobRow[],
-  filtered: LiveJob[],
-  projects: JobProjects,
-  collapsedProjects: ReadonlySet<string>,
-): ProjectBand[] {
-  const projectByRow = new Map(
-    filtered.map(({ entry, job }) => [rowKey(entry.cluster, job.jobid), projectOf(projects, entry.cluster, job.jobid)]),
-  );
+function projectBands(rows: JobRow[], filtered: LiveJob[], collapsedProjects: ReadonlySet<string>): ProjectBand[] {
+  const projectByRow = new Map(filtered.map(({ entry, job }) => [rowKey(entry.cluster, job.jobid), projectOf(job.record)]));
   const rowsByProject = new Map<string, JobRow[]>();
   for (const row of rows) {
     const project = projectByRow.get(row.key) ?? UNASSIGNED;
@@ -391,7 +374,7 @@ function projectBands(
         label: bandLabel(project),
         depth: nestingDepth(project),
         count: shownCounts.get(project) ?? 0,
-        note: project === UNASSIGNED ? projects.unassignedReason : undefined,
+        note: project === UNASSIGNED ? "submitted without --project" : undefined,
         collapsed,
         rows: collapsed ? [] : rowsByProject.get(project) ?? [],
       };
@@ -420,7 +403,7 @@ function toRow(cluster: string, job: Job, inputs: TableInputs, records: ClusterR
     partitionNodes: `${job.partition} · ${job.nodes}`,
     note: job.record ? noteView(job.record, cluster, inputs.reviews) : undefined,
     expanded,
-    details: expanded ? details(cluster, job, inputs.extras.get(key), records, allJobs, inputs.projects) : undefined,
+    details: expanded ? details(cluster, job, inputs.extras.get(key), records, allJobs) : undefined,
   };
 }
 
@@ -453,11 +436,10 @@ function details(
   extras: RowExtras | undefined,
   records: ClusterRecord[],
   allJobs: LiveJob[],
-  projects: JobProjects,
 ): JobDetails {
   const record = job.record ?? undefined;
   const code = record?.code;
-  const previous = record ? previousRun({ cluster, record }, records, projects) : undefined;
+  const previous = record ? previousRun({ cluster, record }, records) : undefined;
   const previousJob = previous
     ? allJobs.find(({ entry, job: other }) => entry.cluster === previous.cluster && other.jobid === previous.record.job_id)
     : undefined;
@@ -493,13 +475,13 @@ function details(
 }
 
 /** D10: the latest earlier record with the same project and job name. */
-export function previousRun(record: ClusterRecord, records: readonly ClusterRecord[], projects: JobProjects): ClusterRecord | undefined {
-  const project = projectOf(projects, record.cluster, record.record.job_id);
+export function previousRun(record: ClusterRecord, records: readonly ClusterRecord[]): ClusterRecord | undefined {
+  const project = projectOf(record.record);
   return records
     .filter(
       (other) =>
         other.record.job_id !== record.record.job_id &&
-        projectOf(projects, other.cluster, other.record.job_id) === project &&
+        projectOf(other.record) === project &&
         other.record.job_name === record.record.job_name &&
         other.record.submitted_at < record.record.submitted_at,
     )

@@ -19,7 +19,6 @@ import {
 } from "./jobsTable";
 import { StateGroupId, stateGroup } from "./jobStates";
 import type { HiddenProjects } from "./hiddenProjects";
-import type { ProjectLookup } from "./projects";
 import { selfAndAncestors } from "./projectTree";
 import type { ReviewStatus, ReviewStore } from "./reviews";
 
@@ -29,7 +28,6 @@ const AUTO_REFRESH_MS = 60_000;
 /** What the panel needs from the rest of the extension. */
 export interface JobsPanelServices {
   data: ClusterData;
-  projects: ProjectLookup;
   hiddenProjects: HiddenProjects;
   addOns: AddOnRegistry;
   reviews: ReviewStore;
@@ -105,7 +103,6 @@ export class JobsPanel {
       panel.onDidChangeViewState(() => this.followVisibility()),
       panel.onDidDispose(() => this.dispose()),
       services.data.onDidChange(() => this.post()),
-      services.projects.onDidChange(() => this.post()),
       services.hiddenProjects.onDidChange(() => this.post()),
       services.addOns.onDidChange(() => this.reloadAddOnLines()),
     );
@@ -244,8 +241,7 @@ export class JobsPanel {
   }
 
   private projectOfRow(key: string): string {
-    const [cluster, ...jobIdParts] = key.split("/");
-    return projectOf(this.services.projects, cluster, jobIdParts.join("/"));
+    return projectOf(jobRefs(this.services.data.jobs).find((job) => job.key === key)?.record);
   }
 
   private groupOf(key: string): StateGroupId | undefined {
@@ -321,7 +317,6 @@ export class JobsPanel {
     return buildJobsTable({
       statuses,
       report: jobs,
-      projects: this.services.projects,
       loggingIn,
       filters: this.filters,
       updatedAt,

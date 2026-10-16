@@ -12,21 +12,20 @@ straight to ctun's stdin.
   Log in asks for the budget, OTP and password in VS Code input boxes, or opens
   ctun's own login window (`ctun.login.method`); log out closes the tunnel.
   `ctun login -i` run by an agent or in a terminal of the window asks there too.
-  Below it, **Projects** lists the jobs per project. The eye next to a project
+  Below it, **Projects** lists the jobs per `--project` of ctun's job record. The eye next to a project
   hides its jobs, and those of every project below it, in the job list; hidden
   projects stay hidden across restarts (Settings Sync carries them). Opening the
   eye of a project below a hidden one shows just that project. A click on a name
   opens the job list with only that project and every project below it; the
   arrow opens or closes its subprojects; **All projects** shows every project again.
-  `ctun.projects.source` picks where projects come from: the `--project` of
-  ctun's job record (default), or an add-on such as W&B. A `/` nests projects:
+  A `/` nests projects:
   `--project htfm/multihead` is `multihead` inside `htfm`, and the view is a tree
-  whose counts include the nested projects. Jobs the source names no project
-  for are Unassigned.
+  whose counts include the nested projects. Jobs submitted without `--project`
+  are Unassigned.
 - **Setup view** (below Projects): whether ctun is found, how many clusters its
   config has, the login method, whether ctun's Claude Code skill is in your global
   Claude folder (`~/.claude/skills/cluster-tunnel`, or under `CLAUDE_CONFIG_DIR`),
-  the project source, and one row per add-on. A click on the skill row offers to
+  and one row per add-on. A click on the skill row offers to
   download the skill from GitHub, at the tag of your ctun version, or opens its
   documentation. Green is
   fine, amber needs fixing, grey is an optional feature that is off. A click
@@ -61,16 +60,15 @@ straight to ctun's stdin.
 ## Add-ons
 
 Add-ons bring in other libraries. Each one is off until you turn it on, and the
-core asks it for three things only: a project per job, lines in a job's
-details, and a row in the Setup view. The core draws them; an add-on never
+core asks it for two things only: lines in a job's details, and a row in the
+Setup view. The core draws them; an add-on never
 touches the table. The interface is in `src/addOns.ts`; it is internal for now.
 
 - **W&B** (`ctun.addons.wandb.enabled`): a **Training** line with the epoch and
-  metrics of the job's W&B run and a link to it, and W&B projects for
-  `ctun.projects.source: wandb`, nested by run group (`<project>/<group>`). A run is found by its tag
+  metrics of the job's W&B run and a link to it. A run is found by its tag
   `slurm:<ClusterName>:<job id>`, or the older `slurm:<job id>`, in the
-  entity's first 100 projects. Tagging a run in W&B later moves an old job into
-  its project. Your training script adds the tag:
+  entity's first 100 projects. The job's project stays its ctun `--project`; keep
+  your W&B project names in line with it yourself. Your training script adds the tag:
   [docs/wandb-tagging.md](docs/wandb-tagging.md), also **ctun: How to Tag W&B
   Runs**.
 
@@ -104,7 +102,6 @@ or, in VS Code: Extensions view → `…` → **Install from VSIX…**.
 |---|---|---|
 | `ctun.path` | `ctun` | The `ctun` executable. Use an absolute path if VS Code does not find it on `PATH`, e.g. `C:\Users\<you>\.local\bin\ctun.exe`. |
 | `ctun.login.method` | `vscode` | `vscode`: VS Code input boxes for budget, OTP and password; the secrets reach ctun on stdin only (`ctun login --credentials-stdin`). `window`: ctun's login window. Applies to **Log in** and to `ctun login -i` from agents and terminals of the window. |
-| `ctun.projects.source` | `record` | Where projects come from: `record` (ctun's `--project`) or `wandb` (the W&B add-on). |
 | `ctun.addons.wandb.enabled` | `false` | Turns on the W&B add-on. |
 | `ctun.addons.wandb.entity` | empty | W&B user or team whose projects are searched for tagged runs; empty means the API key's own. Only its first 100 projects are searched. |
 | `ctun.addons.wandb.metrics` | `val/loss`, `val/mae_T_trans` | Summary metrics shown per run. |

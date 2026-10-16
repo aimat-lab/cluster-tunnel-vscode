@@ -37,8 +37,6 @@ export interface AddOn {
   readonly active: boolean;
   /** Fires when the add-on's answers may have changed, e.g. its key or settings. */
   readonly onDidChange: vscode.Event<void>;
-  /** The project of each job it knows, by `JobRef.key`; called after each jobs refresh. */
-  projectsOf?(jobs: readonly JobRef[]): Promise<ReadonlyMap<string, string>>;
   /** Lines for one job's details; called when they open. */
   detailLines?(job: JobRef): Promise<DetailLine[]>;
   setupCheck?(): Promise<SetupCheck>;

@@ -19,7 +19,6 @@ import {
 } from "../../jobsTable";
 import type { Review } from "../../reviews";
 import { GUARDED_STATUS, JOBS, JOBS_REPORT, LOGGED_OUT_STATUS } from "../fixtures/ctunOutput";
-import { JOB_PROJECTS } from "../fixtures/jobProjects";
 
 const STATUSES = [LOGGED_OUT_STATUS, GUARDED_STATUS];
 
@@ -28,7 +27,6 @@ function table(overrides: Partial<Omit<TableInputs, "filters">> & { filters?: Pa
   return buildJobsTable({
     statuses: STATUSES,
     report: JOBS_REPORT,
-    projects: JOB_PROJECTS,
     loggingIn: new Set(),
     updatedAt: undefined,
     reviews: {},
@@ -76,32 +74,20 @@ test("groups rows by project with Unassigned last", () => {
   );
 });
 
-test("a job's project comes from the active source, not from its record", () => {
-  const byJob = new Map([["haicore/90", "htfm"], ["haicore/101", "htfm"]]);
-  const projects = { byJob, unassignedReason: "no project in W&B", sourceLabel: "W&B", error: undefined };
-  const model = table({ projects });
-  assert.deepStrictEqual(
-    model.groups.map((group) => [group.label, group.count, group.note, group.rows.map((row) => row.id)]),
-    [
-      ["htfm", 2, undefined, ["101", "90"]],
-      ["Unassigned", 6, "no project in W&B", ["102", "103", "91", "92", "93", "94"]],
-    ],
+/** `JOBS_REPORT` with the recorded jobs moved to `projectByJobId`. */
+function withProjects(projectByJobId: Record<string, string>): JobsReport {
+  const [haicore, ...others] = JOBS_REPORT.clusters;
+  const jobs = haicore.jobs.map((job) =>
+    job.record && projectByJobId[job.jobid] ? { ...job, record: { ...job.record, project: projectByJobId[job.jobid] } } : job,
   );
-});
+  return { ...JOBS_REPORT, clusters: [{ ...haicore, jobs }, ...others] };
+}
 
 /** 101 in htfm, 102 in htfm/eval, 91 in htfm/eval/old, 103 in legacy. */
-const NESTED = {
-  ...JOB_PROJECTS,
-  byJob: new Map([
-    ["haicore/101", "htfm"],
-    ["haicore/102", "htfm/eval"],
-    ["haicore/91", "htfm/eval/old"],
-    ["haicore/103", "legacy"],
-  ]),
-};
+const NESTED = withProjects({ "101": "htfm", "102": "htfm/eval", "91": "htfm/eval/old" });
 
 test("nested projects become indented bands, each counting the jobs below it", () => {
-  const model = table({ projects: NESTED });
+  const model = table({ report: NESTED });
   assert.deepStrictEqual(
     model.groups.map((band) => [band.project, band.label, band.depth, band.count, band.rows.map((row) => row.id)]),
     [
@@ -114,8 +100,13 @@ test("nested projects become indented bands, each counting the jobs below it", (
   );
 });
 
+test("a project's empty levels are dropped", () => {
+  const model = table({ report: withProjects({ "102": "htfm//eval/" }) });
+  assert.deepStrictEqual(model.groups.map((band) => band.project), ["htfm", "htfm/eval", "legacy", "unassigned"]);
+});
+
 test("a hidden project leaves out its jobs and those of the projects nested in it", () => {
-  const shownIds = (hidden: string[]) => rows(table({ projects: NESTED, hiddenProjects: new Set(hidden) })).map((row) => row.id);
+  const shownIds = (hidden: string[]) => rows(table({ report: NESTED, hiddenProjects: new Set(hidden) })).map((row) => row.id);
   assert.deepStrictEqual(shownIds(["htfm/eval"]), ["101", "103", "90", "92", "93", "94"]);
   assert.deepStrictEqual(shownIds(["htfm/eva"]), ["101", "102", "91", "103", "90", "92", "93", "94"]);
   assert.deepStrictEqual(shownIds(["htfm", UNASSIGNED]), ["103"]);
@@ -142,7 +133,7 @@ test("a sorted column orders the jobs inside each band and marks its header", ()
 });
 
 test("a folded band hides its jobs and the projects nested in it, but keeps its count", () => {
-  const model = table({ projects: NESTED, collapsedProjects: new Set(["htfm/eval"]) });
+  const model = table({ report: NESTED, collapsedProjects: new Set(["htfm/eval"]) });
   assert.deepStrictEqual(
     model.groups.map((band) => [band.project, band.collapsed, band.count, band.rows.length]),
     [
@@ -152,11 +143,6 @@ test("a folded band hides its jobs and the projects nested in it, but keeps its 
       ["unassigned", false, 4, 4],
     ],
   );
-});
-
-test("a failed project lookup shows as an error of its source", () => {
-  const projects = { ...JOB_PROJECTS, sourceLabel: "W&B", error: "W&B rejected the API key" };
-  assert.deepStrictEqual(table({ projects }).errors, [{ cluster: "W&B", message: "projects: W&B rejected the API key" }]);
 });
 
 test("hidden projects combine with the state toggles and the cluster chip", () => {
@@ -217,12 +203,12 @@ test("a note is an unreviewed draft until reviewed; an edit replaces its text", 
 });
 
 test("pending reviews include records without a listed job and skip reviewed ones", () => {
-  const all = pendingReviews(JOBS_REPORT, {}, JOB_PROJECTS);
+  const all = pendingReviews(JOBS_REPORT, {});
   assert.deepStrictEqual(all.map((card) => card.id), ["102", "101", "80"]);
   assert.deepStrictEqual(all.find((card) => card.id === "101")!.references, ["job:91", "commit:87d86d4"]);
   assert.strictEqual(all.find((card) => card.id === "80")!.stateLabel, "Not listed");
 
-  const afterConfirm = pendingReviews(JOBS_REPORT, { "haic/102": { status: "confirmed", at: "x" } }, JOB_PROJECTS);
+  const afterConfirm = pendingReviews(JOBS_REPORT, { "haic/102": { status: "confirmed", at: "x" } });
   assert.deepStrictEqual(afterConfirm.map((card) => card.id), ["101", "80"]);
   assert.strictEqual(table().pendingCount, 3);
 });

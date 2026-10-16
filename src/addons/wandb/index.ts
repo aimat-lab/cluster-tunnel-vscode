@@ -5,7 +5,7 @@ import type { SetupCheck } from "../../setupChecks";
 import { setWandbKey, showWandbGuide, WANDB_KEY_SECRET } from "./apiKey";
 import { WandbClient } from "./client";
 import { ENABLE_COMMAND, wandbSetupCheck } from "./setup";
-import { jobTags, projectsByJob, runForJob, trainingSummary } from "./tags";
+import { jobTags, runForJob, trainingSummary } from "./tags";
 
 const SETTINGS = "ctun.addons.wandb";
 const DETAIL_LABEL = "Training";
@@ -25,7 +25,7 @@ export function registerWandbAddOn(context: vscode.ExtensionContext, addOns: Add
   );
 }
 
-/** Projects and training metrics from the W&B runs tagged with their Slurm job (D11). */
+/** Training metrics from the W&B runs tagged with their Slurm job (D11). */
 class WandbAddOn implements AddOn, vscode.Disposable {
   readonly id = "wandb";
   readonly label = "W&B";
@@ -48,22 +48,13 @@ class WandbAddOn implements AddOn, vscode.Disposable {
     return settings().get<boolean>("enabled") ?? false;
   }
 
-  async projectsOf(jobs: readonly JobRef[]): Promise<ReadonlyMap<string, string>> {
-    const client = await this.clientForStoredKey();
-    if (!client) {
-      throw new Error("no API key; run ctun: Set W&B API Key");
-    }
-    const tags = [...new Set(jobs.flatMap(jobTags))];
-    return projectsByJob(jobs, await client.taggedRuns(entity(), tags, false));
-  }
-
   async detailLines(job: JobRef): Promise<DetailLine[]> {
     const client = await this.clientForStoredKey();
     if (!client) {
       const help = { label: "Set W&B key", command: "ctun.setWandbKey" };
       return [{ label: DETAIL_LABEL, text: "No W&B API key.", muted: true, help }];
     }
-    const run = runForJob(job, await client.taggedRuns(entity(), jobTags(job), true));
+    const run = runForJob(job, await client.taggedRuns(entity(), jobTags(job)));
     if (!run) {
       const help = { label: "How to tag runs", command: "ctun.showWandbGuide" };
       return [{ label: DETAIL_LABEL, text: `No W&B run tagged ${jobTags(job)[0]}.`, muted: true, help }];

@@ -13,6 +13,14 @@ test("passes the arguments to ctun and parses its JSON", async () => {
   assert.deepStrictEqual(report, ["jobs", "list", "--json", "--since", "24h"]);
 });
 
+test("passes a job edit as one option per field, so a value may start with a dash", async () => {
+  const ctun = fakeCtun("echo-args");
+  const moved = await ctun.editJobs("haicore", ["51319", "51322"], { project: "" });
+  assert.deepStrictEqual(moved, ["-t", "haicore", "jobs", "edit", "51319", "51322", "--project="]);
+  const noted = await ctun.editJobs("haicore", ["51319"], { note: "-lr halved", confirmNote: true });
+  assert.deepStrictEqual(noted, ["-t", "haicore", "jobs", "edit", "51319", "--note=-lr halved", "--confirm-note"]);
+});
+
 test("sends input on stdin, not in argv", async () => {
   const secret = JSON.stringify({ password: "s3cret" });
   const output = await fakeCtun("echo-stdin").run(["-t", "haicore", "login", "--credentials-stdin"], { input: secret });

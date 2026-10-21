@@ -177,6 +177,7 @@ dl.details dd { margin: 0; }
 .review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .commits summary { cursor: pointer; color: var(--vscode-textLink-foreground); }
 .commit-list { margin: 6px 0 0; padding-left: 20px; }
+.edits { margin: 0; padding: 0; list-style: none; color: var(--muted); }
 
 .review { display: flex; flex-direction: column; gap: 12px; }
 .review-top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }

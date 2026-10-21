@@ -147,7 +147,7 @@
     const name = el("div", "mono name", row.name);
     name.title = row.name;
     nameCell.append(name);
-    if (row.note && row.note.status !== "discarded") {
+    if (row.note) {
       const note = el("div", "note-preview");
       if (row.note.status === "unreviewed") note.append(el("span", "tag", "unreviewed"), " ");
       note.append(row.note.preview);
@@ -184,12 +184,12 @@
     return tr;
   }
 
-  function reviewButtons(reviewKey) {
+  function reviewButtons(key) {
     const actions = el("div", "review-actions");
     actions.append(
-      button("primary", "Confirm", { type: "review", reviewKey, action: "confirm" }),
-      button("secondary", "Edit", { type: "review", reviewKey, action: "edit" }),
-      button("secondary", "Discard", { type: "review", reviewKey, action: "discard" }),
+      button("primary", "Confirm", { type: "review", key, action: "confirm" }),
+      button("secondary", "Edit", { type: "review", key, action: "edit" }),
+      button("secondary", "Discard", { type: "review", key, action: "discard" }),
     );
     return actions;
   }
@@ -200,12 +200,11 @@
     list.append(el("dt", "", term), dd);
   }
 
-  function noteDetail(note) {
+  function noteDetail(key, note) {
     const box = el("div", `note-box status-${note.status}`);
-    box.append(el("div", "note-status", note.statusLabel));
-    if (note.status !== "discarded") box.append(el("p", "note-text", note.text));
-    if (note.status === "unreviewed") box.append(reviewButtons(note.reviewKey));
-    else if (note.status !== "discarded") box.append(button("link-button", "Edit", { type: "review", reviewKey: note.reviewKey, action: "edit" }));
+    box.append(el("div", "note-status", note.statusLabel), el("p", "note-text", note.text));
+    if (note.status === "unreviewed") box.append(reviewButtons(key));
+    else box.append(button("link-button", "Edit", { type: "review", key, action: "edit" }));
     return box;
   }
 
@@ -276,12 +275,19 @@
     const list = el("dl", "details");
     if (!details.hasRecord) {
       detailItem(list, "Record", el("span", "muted", "No job record: submitted without ctun run, or before records existed."));
+    } else if (!details.hasFacts) {
+      detailItem(list, "Record", el("span", "muted", "Made by ctun jobs edit: no commit or submit time."));
     }
-    if (row.note) detailItem(list, "Note", noteDetail(row.note));
+    if (row.note) detailItem(list, "Note", noteDetail(row.key, row.note));
     if (details.code) detailItem(list, "Code", codeDetail(details.code));
     if (details.from) detailItem(list, "From", details.from);
     if (details.previous) detailItem(list, "Changes", changesDetail(row, details));
     addOnDetails(list, details.addOnLines);
+    if (details.edits.length) {
+      const edits = el("ul", "edits");
+      for (const edit of details.edits) edits.append(el("li", "small", edit));
+      detailItem(list, "Edits", edits);
+    }
     return fullWidthRow("details-row", list);
   }
 
@@ -337,7 +343,7 @@
     const top = el("div", "review-top");
     top.append(
       button("secondary", "Back to all jobs", { type: "setMode", mode: "jobs" }),
-      el("p", "muted", "The agent's notes wait here until you confirm, edit or discard them. Facts from git, Slurm and W&B need no review."),
+      el("p", "muted", "The agent's notes wait here until you confirm, edit or discard them. Facts from git, Slurm and W&B need no review. Your choice is saved in the job's record on the cluster."),
     );
     section.append(top);
     if (model.reviewCards.length === 0) {
@@ -350,7 +356,7 @@
       heading.append(el("strong", "mono", card.name), " ", el("span", "muted", card.stateLabel));
       article.append(
         heading,
-        el("div", "muted small", `Job ${card.id} on ${card.cluster} · project ${card.project} · submitted ${card.submittedText}`),
+        el("div", "muted small", [`Job ${card.id} on ${card.cluster}`, `project ${card.project}`, card.submittedText && `submitted ${card.submittedText}`].filter(Boolean).join(" · ")),
         el("div", "note-status", "Unreviewed · agent draft"),
         el("p", "note-text", card.note),
       );
@@ -358,12 +364,12 @@
         const refs = el("ul", "references");
         for (const reference of card.references) {
           const item = el("li", "");
-          item.append(el("span", "check", "✓"), " ", el("span", "mono", reference), el("span", "muted", " checked by ctun at submit"));
+          item.append(el("span", "check", "✓"), " ", el("span", "mono", reference), el("span", "muted", " checked by ctun"));
           refs.append(item);
         }
         article.append(refs);
       }
-      const actions = reviewButtons(card.reviewKey);
+      const actions = reviewButtons(card.rowKey);
       actions.append(button("link-button", "Show job", { type: "showJob", key: card.rowKey }));
       article.append(actions);
       section.append(article);

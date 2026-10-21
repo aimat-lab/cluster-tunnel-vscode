@@ -40,21 +40,26 @@ straight to ctun's stdin.
   first). A click
   on a row, or Enter, opens its details:
   - the agent's **note**, an unreviewed draft until you confirm, edit or discard it;
+  - **Record**, when the job has none, or one made by `ctun jobs edit` without
+    submit-time facts;
   - **Code**: the commit at submit time, whether it was pushed, uncommitted files;
   - **From**: the machine and time of the submission;
   - **Changes**: the previous run of the same project and job name, and the
     commits between the two (`git log` on the cluster, loaded on request);
-  - the lines of each add-on that is on, e.g. W&B's **Training**.
+  - the lines of each add-on that is on, e.g. W&B's **Training**;
+  - **Edits**: each `ctun jobs edit` of the record, with time and machine.
 - **Commands** tab (`Commands · <cluster>`): the commands sent to one cluster this
   session, as a console transcript from `ctun logs --json`, with a divider where
   five minutes or more passed. Under each `sbatch` and `scancel`, a box names the
   job with its state and run time; a click on the job ID opens it in "Cluster
   jobs". Copy all copies the commands, one per line. Open it from the
   "Commands" row of a cluster or with **ctun: Show Commands Sent**.
-- **To review**: all notes no one has reviewed yet, as cards. Reviews stay in VS
-  Code (Settings Sync carries them to your other machines); the record on the
-  cluster never changes, and the agent has no command for reviews. The activity
-  bar badge and the status bar show how many wait.
+- **To review**: all notes no one has confirmed yet, as cards. Your review is
+  stored in the job's record, so every machine and agent sees it: Confirm runs
+  `ctun jobs edit <id> --confirm-note`, Edit `--note <text> --confirm-note`, and
+  Discard `--note ""`. A note changed later is unconfirmed again, and the record's
+  edit log keeps the old text. The activity bar badge and the status bar show how
+  many wait.
 - **Status bar**: connected clusters, notes to review, and budget use.
 
 ## Add-ons

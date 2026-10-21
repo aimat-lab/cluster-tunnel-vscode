@@ -12,7 +12,6 @@ import { LoginMethod, logIn, logOut } from "./login";
 import { BRIDGE_VARIABLE, LoginAnswer, startLoginBridge } from "./loginBridge";
 import { HIDDEN_PROJECTS_STATE_KEY, HiddenProjects } from "./hiddenProjects";
 import { ProjectsView } from "./projectsView";
-import { REVIEWS_STATE_KEY, ReviewStore } from "./reviews";
 import { SETUP_VIEW_ID, SetupView } from "./setupView";
 import { offerSkillInstall } from "./skillCommand";
 import { createStatusBar } from "./statusBar";
@@ -20,12 +19,10 @@ import { createStatusBar } from "./statusBar";
 export function activate(context: vscode.ExtensionContext): void {
   const data = new ClusterData(createCtun);
   const addOns = new AddOnRegistry();
-  const reviews = new ReviewStore(context.globalState);
   const hiddenProjects = new HiddenProjects(context.globalState);
-  // D8: reviews live in globalState, which Settings Sync carries to the user's other machines; so do hidden projects.
-  context.globalState.setKeysForSync([REVIEWS_STATE_KEY, HIDDEN_PROJECTS_STATE_KEY]);
-  const reviewsChanged = new vscode.EventEmitter<void>();
-  const pendingCount = () => pendingReviews(data.jobs, reviews.all()).length;
+  // Hidden projects live in globalState, which Settings Sync carries to the user's other machines.
+  context.globalState.setKeysForSync([HIDDEN_PROJECTS_STATE_KEY]);
+  const pendingCount = () => pendingReviews(data.jobs).length;
 
   const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
   const projectTree = new ProjectsView(data, hiddenProjects);
@@ -41,10 +38,6 @@ export function activate(context: vscode.ExtensionContext): void {
     clustersView.message = data.error ? `ctun failed: ${data.error.message}` : undefined;
     updateBadge();
   });
-  reviewsChanged.event(() => {
-    updateBadge();
-    JobsPanel.refreshView();
-  });
   clustersView.onDidChangeVisibility(({ visible }) => {
     if (visible) {
       void data.refreshIfStale();
@@ -55,8 +48,7 @@ export function activate(context: vscode.ExtensionContext): void {
     data,
     hiddenProjects,
     addOns,
-    reviews,
-    onReviewsChanged: () => reviewsChanged.fire(),
+    ctun: createCtun,
     loadChanges: (cluster, workdir, fromCommit, toCommit) => loadChanges(createCtun(), cluster, workdir, fromCommit, toCommit),
   };
   const showJobs = () => JobsPanel.show(context.extensionUri, services);
@@ -79,8 +71,7 @@ export function activate(context: vscode.ExtensionContext): void {
     clustersView,
     projectsView,
     setupView,
-    reviewsChanged,
-    createStatusBar(data, pendingCount, reviewsChanged.event),
+    createStatusBar(data, pendingCount),
     vscode.commands.registerCommand("ctun.refresh", () => data.refresh()),
     vscode.commands.registerCommand("ctun.openConfig", () => openConfig(createCtun())),
     vscode.commands.registerCommand("ctun.installSkill", () => offerSkillInstall(createCtun(), () => setup.refresh())),

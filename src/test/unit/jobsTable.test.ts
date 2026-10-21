@@ -17,8 +17,7 @@ import {
   TableInputs,
   UNASSIGNED,
 } from "../../jobsTable";
-import type { Review } from "../../reviews";
-import { GUARDED_STATUS, JOBS, JOBS_REPORT, LOGGED_OUT_STATUS } from "../fixtures/ctunOutput";
+import { GUARDED_STATUS, JOBS, JOBS_REPORT, LOGGED_OUT_STATUS, recordWithoutFacts, reportWith } from "../fixtures/ctunOutput";
 
 const STATUSES = [LOGGED_OUT_STATUS, GUARDED_STATUS];
 
@@ -29,7 +28,6 @@ function table(overrides: Partial<Omit<TableInputs, "filters">> & { filters?: Pa
     report: JOBS_REPORT,
     loggingIn: new Set(),
     updatedAt: undefined,
-    reviews: {},
     mode: "jobs",
     expanded: new Set(),
     extras: new Map<string, RowExtras>(),
@@ -187,30 +185,47 @@ test("shows the empty state and per-cluster errors", () => {
   ]);
 });
 
-test("a note is an unreviewed draft until reviewed; an edit replaces its text", () => {
-  const unreviewed = rows(table()).find((row) => row.id === "101")!;
-  assert.strictEqual(unreviewed.note?.status, "unreviewed");
-  assert.strictEqual(unreviewed.note?.reviewKey, "haic/101");
+/** `JOBS_REPORT` with job 102's note confirmed in its record. */
+const CONFIRMED_102 = reportWith(
+  JOBS.map((job) => (job.jobid === "102" ? { ...job, record: { ...job.record!, note_confirmed: true } } : job)),
+);
 
-  const reviews: Record<string, Review> = {
-    "haic/101": { status: "edited", text: "Rerun with fixed paths.", at: "2026-10-12T12:00:00Z" },
-    "haic/102": { status: "discarded", at: "2026-10-12T12:00:00Z" },
-  };
-  const reviewed = rows(table({ reviews }));
-  assert.strictEqual(reviewed.find((row) => row.id === "101")!.note?.text, "Rerun with fixed paths.");
-  assert.strictEqual(reviewed.find((row) => row.id === "102")!.note?.status, "discarded");
-  assert.strictEqual(rows(table()).find((row) => row.id === "103")!.note, undefined);
+test("a note is an unreviewed draft until its record says it is confirmed", () => {
+  const note = (report = JOBS_REPORT, id = "101") => rows(table({ report })).find((row) => row.id === id)!.note;
+  assert.strictEqual(note()?.status, "unreviewed");
+  assert.deepStrictEqual([note(CONFIRMED_102, "102")?.status, note(CONFIRMED_102, "102")?.statusLabel], ["confirmed", "Confirmed by you"]);
+  assert.strictEqual(note(JOBS_REPORT, "103"), undefined);
 });
 
-test("pending reviews include records without a listed job and skip reviewed ones", () => {
-  const all = pendingReviews(JOBS_REPORT, {});
+test("pending reviews include records without a listed job and skip confirmed ones", () => {
+  const all = pendingReviews(JOBS_REPORT);
   assert.deepStrictEqual(all.map((card) => card.id), ["102", "101", "80"]);
   assert.deepStrictEqual(all.find((card) => card.id === "101")!.references, ["job:91", "commit:87d86d4"]);
   assert.strictEqual(all.find((card) => card.id === "80")!.stateLabel, "Not listed");
 
-  const afterConfirm = pendingReviews(JOBS_REPORT, { "haic/102": { status: "confirmed", at: "x" } });
-  assert.deepStrictEqual(afterConfirm.map((card) => card.id), ["101", "80"]);
+  assert.deepStrictEqual(pendingReviews(CONFIRMED_102).map((card) => card.id), ["101", "80"]);
   assert.strictEqual(table().pendingCount, 3);
+});
+
+test("a record without facts gives a project but no code, submitter or previous run", () => {
+  const plainSbatch = { ...JOBS.find((job) => job.jobid === "90")!, record: { ...recordWithoutFacts("90", "htfm"), note: "Baseline." } };
+  const report = reportWith(JOBS.map((job) => (job.jobid === "90" ? plainSbatch : job)));
+  const row = rows(table({ report, expanded: new Set(["haicore/90"]) })).find((candidate) => candidate.id === "90")!;
+  assert.deepStrictEqual(
+    [row.details!.hasRecord, row.details!.hasFacts, row.details!.code, row.details!.from, row.details!.previous],
+    [true, false, undefined, undefined, undefined],
+  );
+  assert.match(row.details!.edits[0], / · laptop: project Unassigned → htfm$/);
+  assert.strictEqual(table({ report }).groups.find((band) => band.project === "htfm")!.count, 4);
+  assert.strictEqual(pendingReviews(report).find((card) => card.id === "90")!.submittedText, undefined);
+});
+
+test("an edit log line names each changed field", () => {
+  const changes = [{ at: "2026-10-20T14:36:00+00:00", from: "desk", project: ["htfm", "htfm/mh"], note: ["a", "b"], note_confirmed: [false, true] }];
+  const edited = { ...JOBS[0], record: { ...JOBS[0].record!, changes } } as (typeof JOBS)[number];
+  const report = reportWith([edited, ...JOBS.slice(1)]);
+  const details = rows(table({ report, expanded: new Set(["haicore/101"]) })).find((row) => row.id === "101")!.details!;
+  assert.match(details.edits[0], / · desk: project htfm → htfm › mh, note changed, note confirmed$/);
 });
 
 test("details show the code facts, the submitter and the previous run", () => {

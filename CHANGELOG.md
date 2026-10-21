@@ -30,9 +30,10 @@ All notable changes to the ctun VS Code extension. The format follows
   documentation.
 - Add-ons: an internal interface through which a library adds lines in a
   job's details and a Setup row; each add-on is off by default.
-- Agent notes: the note under each job name, Confirm / Edit / Discard (kept in
-  `globalState`, synced by Settings Sync), a "To review" mode with cards, the
-  activity-bar badge and the status-bar count.
+- Agent notes: the note under each job name, Confirm / Edit / Discard, a "To
+  review" mode with cards, the activity-bar badge and the status-bar count. A
+  review is stored in the job's record through `ctun jobs edit`
+  (`--confirm-note`, `--note`), so every machine and agent sees it.
 - Setup view: the ctun row shows ctun's version and marks one older than 0.9.0.
 - Job details: commit, pushed or not, uncommitted files, submitting machine, the
   previous run of the same job and the commits since it.

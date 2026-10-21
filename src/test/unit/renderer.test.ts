@@ -41,7 +41,6 @@ function model(
     loggingIn: new Set(),
     filters: DEFAULT_FILTERS,
     updatedAt: undefined,
-    reviews: {},
     mode: overrides.mode ?? "jobs",
     expanded: new Set(overrides.expanded ?? []),
     extras: overrides.extras ?? new Map(),
@@ -56,7 +55,7 @@ test("renders project groups, notes and the locked cluster", () => {
   assert.strictEqual(app.querySelector("select#project"), null);
   const text = app.textContent ?? "";
   assert.match(text, /htfm3/);
-  assert.match(text, /Unassigned4submitted without --project/);
+  assert.match(text, /Unassigned4no project in the job record/);
   assert.match(text, /unreviewed Rerun of job:91/);
   assert.match(text, /bwuni3 has no tunnel/);
   assert.match(text, /To review · 3/);
@@ -112,7 +111,7 @@ test("renders the details of an expanded job and sends its actions", () => {
   assert.strictEqual(details.length, 2);
 
   const first = details[0].textContent ?? "";
-  assert.match(first, /Unreviewed agent draft/);
+  assert.match(first, /Unreviewed draft/);
   assert.match(first, /epoch 31 · val\/loss 0.690/);
   assert.match(first, /87d86d4 on main · pushed/);
   assert.match(first, /Previous run: job 91 on haicore \(Failed\)/);
@@ -127,7 +126,7 @@ test("renders the details of an expanded job and sends its actions", () => {
   click("Confirm", details[0]);
   click("W&B ↗", details[0]);
   assert.deepStrictEqual(sent.slice(-2), [
-    { type: "review", reviewKey: "haic/101", action: "confirm" },
+    { type: "review", key: "haicore/101", action: "confirm" },
     { type: "openUrl", url: "https://wandb.ai/e/p/runs/r" },
   ]);
 });
@@ -158,11 +157,11 @@ test("renders the review cards with their checked references", () => {
     cards.map((card) => card.querySelector(".muted.small")?.textContent?.split(" · ")[0]),
     ["Job 102 on haicore", "Job 101 on haicore", "Job 80 on haicore"],
   );
-  assert.match(cards[1].textContent ?? "", /✓ commit:87d86d4 checked by ctun at submit/);
+  assert.match(cards[1].textContent ?? "", /✓ commit:87d86d4 checked by ctun/);
   click("Discard", cards[0]);
   click("Show job", cards[1]);
   assert.deepStrictEqual(sent.slice(-2), [
-    { type: "review", reviewKey: "haic/102", action: "discard" },
+    { type: "review", key: "haicore/102", action: "discard" },
     { type: "showJob", key: "haicore/101" },
   ]);
 });

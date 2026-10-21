@@ -33,6 +33,7 @@ function model(
     extras?: Map<string, RowExtras>;
     collapsed?: string[];
     sort?: JobsSort;
+    selected?: string[];
   } = {},
 ) {
   return buildJobsTable({
@@ -43,6 +44,7 @@ function model(
     updatedAt: undefined,
     mode: overrides.mode ?? "jobs",
     expanded: new Set(overrides.expanded ?? []),
+    selected: new Set(overrides.selected ?? []),
     extras: overrides.extras ?? new Map(),
     collapsedProjects: new Set(overrides.collapsed ?? []),
     hiddenProjects: new Set(),
@@ -82,6 +84,57 @@ test("a click on a job row or Enter on it toggles its details", () => {
     { type: "expand", key: "haicore/101" },
   ]);
   assert.strictEqual(app.querySelectorAll("button.icon-button").length, 0);
+});
+
+test("Ctrl- and Shift-click select rows; the bar moves or clears them", () => {
+  const { app, sent, click } = render(model({ selected: ["haicore/101", "haicore/102"] }));
+  const row = (key: string) => [...app.querySelectorAll<HTMLElement>("tr.job")].find((node) => node.dataset.rowKey === key)!;
+  const MouseEvent = app.ownerDocument.defaultView!.MouseEvent;
+  row("haicore/103").dispatchEvent(new MouseEvent("click", { ctrlKey: true, bubbles: true }));
+  row("haicore/90").dispatchEvent(new MouseEvent("click", { shiftKey: true, bubbles: true }));
+  assert.deepStrictEqual(sent.slice(-2), [
+    { type: "select", key: "haicore/103", extend: "toggle" },
+    { type: "select", key: "haicore/90", extend: "range" },
+  ]);
+
+  assert.strictEqual(row("haicore/101").getAttribute("aria-selected"), "true");
+  assert.deepStrictEqual(JSON.parse(row("haicore/101").dataset.vscodeContext!), {
+    webviewSection: "job",
+    jobKey: "haicore/101",
+    preventDefaultContextMenuItems: true,
+  });
+  const bar = app.querySelector(".selection-bar")!;
+  assert.match(bar.textContent ?? "", /^2 selected/);
+  click("Move to project…", bar);
+  click("Clear", bar);
+  assert.deepStrictEqual(sent.slice(-2), [{ type: "moveToProject" }, { type: "clearSelection" }]);
+  assert.strictEqual(render(model()).app.querySelector(".selection-bar"), null);
+});
+
+test("only selected rows drag, and a project band takes the dropped jobs", () => {
+  const { app, sent } = render(model({ selected: ["haicore/101", "haicore/102"] }));
+  const row = (key: string) => [...app.querySelectorAll<HTMLElement>("tr.job")].find((node) => node.dataset.rowKey === key)!;
+  assert.deepStrictEqual([row("haicore/101").draggable, row("haicore/103").draggable], [true, false]);
+
+  const window = app.ownerDocument.defaultView!;
+  const carried = new Map<string, string>();
+  const dataTransfer = {
+    types: ["application/vnd.ctun.jobs"],
+    effectAllowed: "",
+    setData: (type: string, value: string) => carried.set(type, value),
+    getData: (type: string) => carried.get(type) ?? "",
+    setDragImage: () => {},
+  };
+  const dragEvent = (type: string) => Object.assign(new window.Event(type, { bubbles: true, cancelable: true }), { dataTransfer });
+  row("haicore/101").dispatchEvent(dragEvent("dragstart"));
+  assert.deepStrictEqual(JSON.parse(carried.get("application/vnd.ctun.jobs")!), ["haicore/101", "haicore/102"]);
+
+  const legacyBand = [...app.querySelectorAll(".group-row")].find((band) => band.textContent?.startsWith("legacy"))!;
+  const dragover = dragEvent("dragover");
+  legacyBand.dispatchEvent(dragover);
+  assert.ok(dragover.defaultPrevented);
+  legacyBand.dispatchEvent(dragEvent("drop"));
+  assert.deepStrictEqual(sent.at(-1), { type: "dropOnProject", keys: ["haicore/101", "haicore/102"], project: "legacy" });
 });
 
 test("a column header sorts by its column and shows the direction", () => {

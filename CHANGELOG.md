@@ -34,6 +34,11 @@ All notable changes to the ctun VS Code extension. The format follows
   review" mode with cards, the activity-bar badge and the status-bar count. A
   review is stored in the job's record through `ctun jobs edit`
   (`--confirm-note`, `--note`), so every machine and agent sees it.
+- Editing jobs: Ctrl/Shift-click selects rows, and the selection drags onto a
+  project in the Projects view or a band in the table; **Move to project…** (to an
+  existing, Unassigned or new project) and **Edit Note…** run `ctun jobs edit`,
+  from the selection bar or a row's context menu. A job's details list the
+  record's edits; a record that `jobs edit` made without facts says so.
 - Setup view: the ctun row shows ctun's version and marks one older than 0.9.0.
 - Job details: commit, pushed or not, uncommitted files, submitting machine, the
   previous run of the same job and the commits since it.

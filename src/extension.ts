@@ -25,8 +25,13 @@ export function activate(context: vscode.ExtensionContext): void {
   const pendingCount = () => pendingReviews(data.jobs).length;
 
   const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
-  const projectTree = new ProjectsView(data, hiddenProjects);
-  const projectsView = vscode.window.createTreeView("ctun.projects", { treeDataProvider: projectTree });
+  const projectTree = new ProjectsView(data, hiddenProjects, async (keys, project) =>
+    JobsPanel.open?.moveJobs(keys, project),
+  );
+  const projectsView = vscode.window.createTreeView("ctun.projects", {
+    treeDataProvider: projectTree,
+    dragAndDropController: projectTree,
+  });
   const setup = new SetupView(data, addOns, createCtun);
   const setupView = vscode.window.createTreeView(SETUP_VIEW_ID, { treeDataProvider: setup });
   const updateBadge = () => {
@@ -49,6 +54,7 @@ export function activate(context: vscode.ExtensionContext): void {
     hiddenProjects,
     addOns,
     ctun: createCtun,
+    knownProjects: () => projectTree.knownProjects(),
     loadChanges: (cluster, workdir, fromCommit, toCommit) => loadChanges(createCtun(), cluster, workdir, fromCommit, toCommit),
   };
   const showJobs = () => JobsPanel.show(context.extensionUri, services);
@@ -78,6 +84,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("ctun.showJobs", showJobs),
     vscode.commands.registerCommand("ctun.showCommands", showCommands),
     vscode.commands.registerCommand("ctun.showReviews", () => showJobs().showReviews()),
+    vscode.commands.registerCommand("ctun.moveToProject", (row: JobRowContext) => JobsPanel.open?.moveToProject(row.jobKey)),
+    vscode.commands.registerCommand("ctun.editNote", (row: JobRowContext) => JobsPanel.open?.editNote(row.jobKey)),
     vscode.commands.registerCommand("ctun.hideProject", (project: string) => hiddenProjects.hide(project)),
     vscode.commands.registerCommand("ctun.showProject", (project: string) =>
       hiddenProjects.show(project, projectTree.knownProjects()),
@@ -125,6 +133,11 @@ async function announceLoginBridge(context: vscode.ExtensionContext, answer: Log
 }
 
 export function deactivate(): void {}
+
+/** What a right-click on a job row passes to the commands of its context menu (`data-vscode-context` in the webview). */
+interface JobRowContext {
+  jobKey: string;
+}
 
 function createCtun(): Ctun {
   const ctunPath = vscode.workspace.getConfiguration("ctun").get<string>("path") || "ctun";

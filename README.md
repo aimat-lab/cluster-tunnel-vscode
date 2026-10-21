@@ -48,6 +48,15 @@ straight to ctun's stdin.
     commits between the two (`git log` on the cluster, loaded on request);
   - the lines of each add-on that is on, e.g. W&B's **Training**;
   - **Edits**: each `ctun jobs edit` of the record, with time and machine.
+
+  Ctrl-click (Cmd-click on macOS) selects a row. Shift-click selects every row
+  from the last one clicked and closes their details. Drag the selection onto a
+  project in the Projects view, or onto a project band in the table, to move it
+  there. A bar also offers **Move to project…**: an existing project, Unassigned, or a new one (a
+  `/` nests it). A right-click on a row offers **Move to Project…** (for the
+  selection, or that row alone) and **Edit Note…**. Each change runs one
+  `ctun -t <cluster> jobs edit` per cluster and reloads the jobs. It is stored in the
+  job's record on the cluster, so every machine and agent sees it.
 - **Commands** tab (`Commands · <cluster>`): the commands sent to one cluster this
   session, as a console transcript from `ctun logs --json`, with a divider where
   five minutes or more passed. Under each `sbatch` and `scancel`, a box names the
@@ -119,6 +128,7 @@ The W&B API key goes in VS Code's SecretStorage: run **ctun: Set W&B API Key**.
 | ctun: Show Cluster Jobs | Clusters view title, the "Jobs" row |
 | ctun: Show Commands Sent | the "Commands" row, Command Palette |
 | ctun: Review Agent Notes | status bar, "To review" button |
+| Move to Project… / Edit Note… | right-click on a job row; the selection bar |
 | ctun: Install the Claude Code Skill | Setup view, Command Palette |
 | ctun: Turn On the W&B Add-on | Setup view, Command Palette |
 | ctun: Set / Remove W&B API Key | Setup view, Command Palette |

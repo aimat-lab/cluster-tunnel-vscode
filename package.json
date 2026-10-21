@@ -81,6 +81,16 @@
         "icon": "$(comment-unresolved)"
       },
       {
+        "command": "ctun.moveToProject",
+        "title": "Move to Project…",
+        "category": "ctun"
+      },
+      {
+        "command": "ctun.editNote",
+        "title": "Edit Note…",
+        "category": "ctun"
+      },
+      {
         "command": "ctun.hideProject",
         "title": "Hide Project",
         "category": "ctun",
@@ -186,7 +196,27 @@
           "group": "inline"
         }
       ],
+      "webview/context": [
+        {
+          "command": "ctun.moveToProject",
+          "when": "webviewId == 'ctun.jobs' && webviewSection == 'job'",
+          "group": "edit@1"
+        },
+        {
+          "command": "ctun.editNote",
+          "when": "webviewId == 'ctun.jobs' && webviewSection == 'job'",
+          "group": "edit@2"
+        }
+      ],
       "commandPalette": [
+        {
+          "command": "ctun.moveToProject",
+          "when": "false"
+        },
+        {
+          "command": "ctun.editNote",
+          "when": "false"
+        },
         {
           "command": "ctun.login",
           "when": "false"

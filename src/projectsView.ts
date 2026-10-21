@@ -1,11 +1,14 @@
 import * as vscode from "vscode";
 import type { ClusterData } from "./clusterData";
 import type { HiddenProjects } from "./hiddenProjects";
-import { bandLabel, projectCounts, projectLabel, sortProjects } from "./jobsTable";
+import { bandLabel, jobKeysIn, projectCounts, projectLabel, sortProjects } from "./jobsTable";
 import { isHiddenBy, parentProject, totalsWithNested } from "./projectTree";
 
 /** The "All projects" row; `\0` is never part of a project name. */
 const ALL_PROJECTS = "\0all";
+
+/** What the "Cluster jobs" tab puts in a drag of job rows: their row keys as a JSON list. */
+export const JOBS_DRAG_MIME = "application/vnd.ctun.jobs";
 
 /**
  * The Projects tree under Clusters: job counts per project, nested ones included.
@@ -13,13 +16,17 @@ const ALL_PROJECTS = "\0all";
  * name shows only that project and those below it in the job list; "All projects"
  * shows every project again.
  */
-export class ProjectsView implements vscode.TreeDataProvider<string> {
+export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.TreeDragAndDropController<string> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
+  /** `text/plain` too: a drag from a webview may reach the tree with only that type. */
+  readonly dropMimeTypes = [JOBS_DRAG_MIME, "text/plain"];
+  readonly dragMimeTypes = [];
 
   constructor(
     private readonly data: ClusterData,
     private readonly hiddenProjects: HiddenProjects,
+    private readonly moveJobs: (keys: string[], project: string) => Promise<void>,
   ) {
     data.onDidChange(() => this.changed.fire());
     hiddenProjects.onDidChange(() => this.changed.fire());
@@ -62,6 +69,16 @@ export class ProjectsView implements vscode.TreeDataProvider<string> {
     item.iconPath = new vscode.ThemeIcon("folder");
     item.contextValue = isHiddenBy(project, this.hiddenProjects.all()) ? "project-hidden" : "project-shown";
     return item;
+  }
+
+  /** Job rows dragged from the "Cluster jobs" tab onto a project move there. */
+  async handleDrop(target: string | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
+    const dragged = await (dataTransfer.get(JOBS_DRAG_MIME) ?? dataTransfer.get("text/plain"))?.asString();
+    const keys = dragged === undefined ? undefined : jobKeysIn(dragged);
+    if (target === undefined || target === ALL_PROJECTS || keys === undefined) {
+      return;
+    }
+    await this.moveJobs(keys, target);
   }
 
   /** Every project with jobs in the report, and every project above one. */

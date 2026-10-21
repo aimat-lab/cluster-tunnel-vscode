@@ -81,6 +81,8 @@ export interface TableInputs {
   mode: "jobs" | "review";
   /** Row keys (`<cluster>/<job id>`) whose details are open. */
   expanded: ReadonlySet<string>;
+  /** Row keys picked with Ctrl- or Shift-click, for Move to Project. */
+  selected: ReadonlySet<string>;
   extras: ReadonlyMap<string, RowExtras>;
   /** Projects whose band is folded: their jobs and nested projects are hidden. */
   collapsedProjects: ReadonlySet<string>;
@@ -106,6 +108,8 @@ export interface JobsTableModel {
   updatedText: string;
   pendingCount: number;
   reviewCards: ReviewCard[];
+  /** Selected rows that are shown; only these are moved. */
+  selectedCount: number;
 }
 
 export interface ProjectBand {
@@ -148,6 +152,7 @@ export interface JobRow {
   partitionNodes: string;
   note: NoteView | undefined;
   expanded: boolean;
+  selected: boolean;
   details: JobDetails | undefined;
 }
 
@@ -256,6 +261,7 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
     return messages.flatMap((message) => (message ? [{ cluster: entry.cluster, message }] : []));
   });
   const reviewCards = pendingReviews(report);
+  const groups = projectBands(rows, filtered, inputs.collapsedProjects);
 
   return {
     mode: inputs.mode,
@@ -276,18 +282,30 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
       label: id === ALL_CLUSTERS ? "All clusters" : id,
       pressed: filters.cluster === id,
     })),
-    groups: projectBands(rows, filtered, inputs.collapsedProjects),
+    groups,
     lockedClusters,
     errors: clusterErrors,
     showEmpty: rows.length === 0 && lockedClusters.length === 0,
     updatedText: inputs.updatedAt ? `Updated ${inputs.updatedAt.toLocaleTimeString()}` : "Loading…",
     pendingCount: reviewCards.length,
     reviewCards,
+    selectedCount: groups.flatMap((band) => band.rows).filter((row) => row.selected).length,
   };
 }
 
 export function rowKey(cluster: string, jobId: string): string {
   return `${cluster}/${jobId}`;
+}
+
+/** The row keys in a drag from the "Cluster jobs" tab; undefined for any other text, e.g. from an editor. */
+export function jobKeysIn(text: string): string[] | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    const isJobKeys = Array.isArray(parsed) && parsed.length > 0 && parsed.every((key) => typeof key === "string" && key.includes("/"));
+    return isJobKeys ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The full path, e.g. `htfm › multihead`. */
@@ -402,6 +420,7 @@ function toRow(cluster: string, job: Job, inputs: TableInputs, records: ClusterR
     partitionNodes: `${job.partition} · ${job.nodes}`,
     note: job.record ? noteView(job.record) : undefined,
     expanded,
+    selected: inputs.selected.has(key),
     details: expanded ? details(cluster, job, inputs.extras.get(key), records, allJobs) : undefined,
   };
 }

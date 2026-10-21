@@ -10,6 +10,7 @@ import {
   JobRow,
   JobsFilters,
   JobsSort,
+  jobKeysIn,
   noteReferences,
   pendingReviews,
   RowExtras,
@@ -30,6 +31,7 @@ function table(overrides: Partial<Omit<TableInputs, "filters">> & { filters?: Pa
     updatedAt: undefined,
     mode: "jobs",
     expanded: new Set(),
+    selected: new Set(),
     extras: new Map<string, RowExtras>(),
     collapsedProjects: new Set(),
     sort: DEFAULT_SORT,
@@ -228,6 +230,13 @@ test("an edit log line names each changed field", () => {
   assert.match(details.edits[0], / · desk: project htfm → htfm › mh, note changed, note confirmed$/);
 });
 
+test("marks selected rows and counts only the shown ones", () => {
+  const selected = new Set(["haicore/101", "haicore/90"]);
+  const model = table({ selected, filters: { shownGroups: { ...DEFAULT_FILTERS.shownGroups, completed: false } } });
+  assert.deepStrictEqual(rows(model).filter((row) => row.selected).map((row) => row.id), ["101"]);
+  assert.strictEqual(model.selectedCount, 1);
+});
+
 test("details show the code facts, the submitter and the previous run", () => {
   const model = table({ expanded: new Set(["haicore/101", "haicore/103"]) });
   const details = rows(model).find((row) => row.id === "101")!.details!;
@@ -332,4 +341,11 @@ test("add-ons see every listed and recorded job with its Slurm cluster", () => {
     record: JOBS_REPORT.clusters[0].records_without_job![0],
   });
   assert.ok(jobRefs(JOBS_REPORT).every((job) => job.slurmCluster === null));
+});
+
+test("reads the job keys of a drag and ignores other text", () => {
+  assert.deepStrictEqual(jobKeysIn('["haicore/101","haicore/102"]'), ["haicore/101", "haicore/102"]);
+  assert.strictEqual(jobKeysIn("const x = 1;"), undefined);
+  assert.strictEqual(jobKeysIn('["no slash"]'), undefined);
+  assert.strictEqual(jobKeysIn("[]"), undefined);
 });

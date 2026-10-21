@@ -54,7 +54,12 @@ straight to ctun's stdin.
   Ctrl-click (Cmd-click on macOS) selects a row. Shift-click selects every row
   from the last one clicked and closes their details. Drag the selection onto a
   project in the Projects view, or onto a project band in the table, to move it
-  there. A bar also offers **Move to project…**: an existing project, Unassigned, or a new one (a
+  there. To drop on a project that has no jobs yet, make it first with the
+  **New Project…** button in the Projects view's title bar: it goes into the
+  selected project, or at the top level. While it has no jobs it is marked
+  "draft": ctun stores a job's project in the job's record, so a project without
+  jobs exists only in VS Code (Settings Sync carries it), and ctun and agents
+  don't see it. Its (i) explains this, and its trash icon deletes it. A bar also offers **Move to project…**: an existing project, Unassigned, or a new one (a
   `/` nests it). A right-click on a row offers **Move to Project…** (for the
   selection, or that row alone) and **Edit Note…**. Each change runs one
   `ctun -t <cluster> jobs edit` per cluster and reloads the jobs. It is stored in the

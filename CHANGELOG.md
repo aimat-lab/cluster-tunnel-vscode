@@ -42,6 +42,10 @@ All notable changes to the ctun VS Code extension. The format follows
 - Projects view: it lists every project of all time from `ctun projects list`,
   with all-time job counts, not only those of the "Ended in" window; Unassigned
   still counts the window's jobs.
+- Projects view: **New Project…** in its title bar makes an empty draft project
+  inside the selected one, to drop jobs on. Drafts are kept in `globalState`. A
+  project without jobs is marked "draft", with an (i) that explains why and a
+  trash icon that deletes it.
 - Setup view: the ctun row shows ctun's version and marks one older than 0.9.0.
 - Job details: commit, pushed or not, uncommitted files, submitting machine, the
   previous run of the same job and the commits since it.

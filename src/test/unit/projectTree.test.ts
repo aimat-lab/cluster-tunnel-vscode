@@ -4,6 +4,7 @@ import {
   hiddenAfterShowing,
   hiddenToShowOnly,
   isHiddenBy,
+  withoutNested,
   leafName,
   nestingDepth,
   normalizeProject,
@@ -53,4 +54,9 @@ test("showing a project below a hidden one keeps the rest of that project hidden
     "legacy",
   ]);
   assert.deepStrictEqual([...hiddenAfterShowing("legacy", new Set(["htfm", "legacy"]), known)], ["htfm"]);
+});
+
+test("removing a project removes the projects nested in it, not its siblings", () => {
+  const drafts = ["htfm", "htfm/mh", "htfm/mh/lr", "htfmx", "sweeps"];
+  assert.deepStrictEqual([...withoutNested(drafts, "htfm/mh")], ["htfm", "htfmx", "sweeps"]);
 });

@@ -7,11 +7,13 @@ import { loadChanges } from "./codeChanges";
 import { CommandsPanel, CommandsPanelServices } from "./commandsPanel";
 import { Ctun } from "./ctun";
 import { JobsPanel, JobsPanelServices } from "./jobsPanel";
-import { pendingReviews } from "./jobsTable";
+import { pendingReviews, projectLabel } from "./jobsTable";
+import { normalizeProject, PROJECT_SEPARATOR } from "./projectTree";
 import { LoginMethod, logIn, logOut } from "./login";
 import { BRIDGE_VARIABLE, LoginAnswer, startLoginBridge } from "./loginBridge";
+import { DRAFT_PROJECTS_STATE_KEY, DraftProjects } from "./draftProjects";
 import { HIDDEN_PROJECTS_STATE_KEY, HiddenProjects } from "./hiddenProjects";
-import { ProjectsView } from "./projectsView";
+import { DRAFT_PROJECT_INFO, ProjectsView } from "./projectsView";
 import { SETUP_VIEW_ID, SetupView } from "./setupView";
 import { offerSkillInstall } from "./skillCommand";
 import { createStatusBar } from "./statusBar";
@@ -20,12 +22,13 @@ export function activate(context: vscode.ExtensionContext): void {
   const data = new ClusterData(createCtun);
   const addOns = new AddOnRegistry();
   const hiddenProjects = new HiddenProjects(context.globalState);
-  // Hidden projects live in globalState, which Settings Sync carries to the user's other machines.
-  context.globalState.setKeysForSync([HIDDEN_PROJECTS_STATE_KEY]);
+  const draftProjects = new DraftProjects(context.globalState);
+  // Hidden and draft projects live in globalState, which Settings Sync carries to the user's other machines.
+  context.globalState.setKeysForSync([HIDDEN_PROJECTS_STATE_KEY, DRAFT_PROJECTS_STATE_KEY]);
   const pendingCount = () => pendingReviews(data.jobs).length;
 
   const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
-  const projectTree = new ProjectsView(data, hiddenProjects, async (keys, project) =>
+  const projectTree = new ProjectsView(data, hiddenProjects, draftProjects, async (keys, project) =>
     JobsPanel.open?.moveJobs(keys, project),
   );
   const projectsView = vscode.window.createTreeView("ctun.projects", {
@@ -74,6 +77,7 @@ export function activate(context: vscode.ExtensionContext): void {
     data,
     addOns,
     hiddenProjects,
+    draftProjects,
     clustersView,
     projectsView,
     setupView,
@@ -91,6 +95,18 @@ export function activate(context: vscode.ExtensionContext): void {
       hiddenProjects.show(project, projectTree.knownProjects()),
     ),
     vscode.commands.registerCommand("ctun.showAllProjects", () => hiddenProjects.showAll()),
+    vscode.commands.registerCommand("ctun.newProject", async () => {
+      const parent = projectTree.parentForNewProject(projectsView.selection[0]);
+      const project = await askNewProject(parent, projectTree.knownProjects());
+      if (project !== undefined) {
+        await draftProjects.add(project);
+        await projectsView.reveal(project, { select: true, expand: true });
+      }
+    }),
+    vscode.commands.registerCommand("ctun.deleteDraftProject", (project: string) => draftProjects.remove(project)),
+    vscode.commands.registerCommand("ctun.aboutDraftProjects", () =>
+      vscode.window.showInformationMessage("A draft project has no jobs yet", { modal: true, detail: DRAFT_PROJECT_INFO }),
+    ),
     vscode.commands.registerCommand("ctun.showOnlyProject", async (project: string) => {
       await hiddenProjects.showOnly(project, projectTree.knownProjects());
       showJobs();
@@ -133,6 +149,22 @@ async function announceLoginBridge(context: vscode.ExtensionContext, answer: Log
 }
 
 export function deactivate(): void {}
+
+/** Asks for the new project's name below `parent`; returns its full path, or undefined when cancelled. */
+async function askNewProject(parent: string | undefined, known: readonly string[]): Promise<string | undefined> {
+  const fullPath = (name: string) => normalizeProject(parent === undefined ? name : `${parent}${PROJECT_SEPARATOR}${name}`);
+  const name = await vscode.window.showInputBox({
+    title: parent === undefined ? "New project" : `New project in ${projectLabel(parent)}`,
+    prompt: "A / nests it further, e.g. sweeps/lr.",
+    validateInput: (value) => {
+      if (!normalizeProject(value)) {
+        return "Give the project a name.";
+      }
+      return known.includes(fullPath(value)) ? `${projectLabel(fullPath(value))} already exists.` : undefined;
+    },
+  });
+  return name === undefined ? undefined : fullPath(name);
+}
 
 /** What a right-click on a job row passes to the commands of its context menu (`data-vscode-context` in the webview). */
 interface JobRowContext {

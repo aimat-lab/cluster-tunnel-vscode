@@ -91,6 +91,24 @@
         "category": "ctun"
       },
       {
+        "command": "ctun.newProject",
+        "title": "New Project…",
+        "category": "ctun",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "ctun.aboutDraftProjects",
+        "title": "What Is a Draft Project?",
+        "category": "ctun",
+        "icon": "$(info)"
+      },
+      {
+        "command": "ctun.deleteDraftProject",
+        "title": "Delete Draft Project",
+        "category": "ctun",
+        "icon": "$(trash)"
+      },
+      {
         "command": "ctun.hideProject",
         "title": "Hide Project",
         "category": "ctun",
@@ -172,6 +190,11 @@
           "command": "ctun.openConfig",
           "when": "view == ctun.clusters",
           "group": "navigation@2"
+        },
+        {
+          "command": "ctun.newProject",
+          "when": "view == ctun.projects",
+          "group": "navigation@0"
         }
       ],
       "view/item/context": [
@@ -194,6 +217,16 @@
           "command": "ctun.showProject",
           "when": "view == ctun.projects && viewItem == project-hidden",
           "group": "inline"
+        },
+        {
+          "command": "ctun.aboutDraftProjects",
+          "when": "view == ctun.projects && viewItem == project-draft",
+          "group": "inline@0"
+        },
+        {
+          "command": "ctun.deleteDraftProject",
+          "when": "view == ctun.projects && viewItem == project-draft",
+          "group": "inline@1"
         }
       ],
       "webview/context": [
@@ -209,6 +242,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "ctun.deleteDraftProject",
+          "when": "false"
+        },
         {
           "command": "ctun.moveToProject",
           "when": "false"

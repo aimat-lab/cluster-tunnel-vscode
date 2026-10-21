@@ -34,7 +34,7 @@ export interface JobsPanelServices {
   hiddenProjects: HiddenProjects;
   addOns: AddOnRegistry;
   ctun: () => Ctun;
-  /** Every project of all time, for Move to Project. */
+  /** Every project of all time and every draft, for Move to Project. */
   knownProjects: () => string[];
   loadChanges: (cluster: string, workdir: string, fromCommit: string, toCommit: string) => Promise<ChangesState>;
 }

@@ -94,6 +94,11 @@ export function hiddenAfterShowing(project: string, hidden: ReadonlySet<string>,
   return result;
 }
 
+/** `projects` without `project` and every project nested in it. */
+export function withoutNested(projects: Iterable<string>, project: string): Set<string> {
+  return new Set([...projects].filter((other) => !selfAndAncestors(other).includes(project)));
+}
+
 /** True when `project` or a project above it is in `hidden`. */
 export function isHiddenBy(project: string, hidden: ReadonlySet<string>): boolean {
   return selfAndAncestors(project).some((level) => hidden.has(level));

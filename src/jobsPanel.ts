@@ -34,7 +34,7 @@ export interface JobsPanelServices {
   hiddenProjects: HiddenProjects;
   addOns: AddOnRegistry;
   ctun: () => Ctun;
-  /** Every project with jobs in the report, for Move to Project. */
+  /** Every project of all time, for Move to Project. */
   knownProjects: () => string[];
   loadChanges: (cluster: string, workdir: string, fromCommit: string, toCommit: string) => Promise<ChangesState>;
 }
@@ -170,7 +170,7 @@ export class JobsPanel {
         this.setFilters({ ...this.filters, since: message.since });
         return;
       case "refresh":
-        await this.refresh();
+        await this.refresh("withProjects");
         return;
       case "login":
         void vscode.commands.executeCommand("ctun.login", message.cluster);
@@ -355,7 +355,7 @@ export class JobsPanel {
       void vscode.window.showErrorMessage(error.message);
       return false;
     } finally {
-      await this.refresh();
+      await this.refresh("withProjects");
     }
   }
 
@@ -422,11 +422,14 @@ export class JobsPanel {
     this.post();
   }
 
-  private async refresh(onlyIfStale = false): Promise<void> {
+  /** `ifStale` when the tab shows again, `jobs` for the timer and a new window, `withProjects` for Refresh and after an edit. */
+  private async refresh(scope: "ifStale" | "jobs" | "withProjects" = "jobs"): Promise<void> {
+    const { data } = this.services;
+    const loads = { ifStale: () => data.refreshIfStale(), jobs: () => data.refresh(), withProjects: () => data.refreshWithProjects() };
     this.refreshing = true;
     this.post();
     try {
-      await (onlyIfStale ? this.services.data.refreshIfStale() : this.services.data.refresh());
+      await loads[scope]();
     } finally {
       this.refreshing = false;
       this.post();
@@ -438,7 +441,7 @@ export class JobsPanel {
     clearInterval(this.refreshTimer);
     this.refreshTimer = undefined;
     if (this.panel.visible) {
-      void this.refresh(true);
+      void this.refresh("ifStale");
       this.refreshTimer = setInterval(() => void this.refresh(), AUTO_REFRESH_MS);
     }
   }

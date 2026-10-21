@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { jobRefs } from "../../addOns";
 import type { JobsReport } from "../../ctun";
 import {
+  allTimeProjectCounts,
   buildJobsTable,
   DEFAULT_FILTERS,
   DEFAULT_SORT,
@@ -348,4 +349,17 @@ test("reads the job keys of a drag and ignores other text", () => {
   assert.strictEqual(jobKeysIn("const x = 1;"), undefined);
   assert.strictEqual(jobKeysIn('["no slash"]'), undefined);
   assert.strictEqual(jobKeysIn("[]"), undefined);
+});
+
+test("the Projects view counts named projects of all time and Unassigned in the window", () => {
+  const projects = {
+    clusters: [
+      { cluster: "haicore", live: true, error: null, projects: [{ project: "htfm", jobs: 40 }, { project: "old//sweep", jobs: 2 }] },
+      { cluster: "kcist", live: true, error: null, projects: [{ project: "htfm", jobs: 5 }] },
+    ],
+  };
+  assert.deepStrictEqual(
+    [...allTimeProjectCounts(projects, JOBS_REPORT)],
+    [["htfm", 45], ["old/sweep", 2], [UNASSIGNED, 4]],
+  );
 });

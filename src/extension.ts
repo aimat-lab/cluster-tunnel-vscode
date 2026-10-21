@@ -78,7 +78,7 @@ export function activate(context: vscode.ExtensionContext): void {
     projectsView,
     setupView,
     createStatusBar(data, pendingCount),
-    vscode.commands.registerCommand("ctun.refresh", () => data.refresh()),
+    vscode.commands.registerCommand("ctun.refresh", () => data.refreshWithProjects()),
     vscode.commands.registerCommand("ctun.openConfig", () => openConfig(createCtun())),
     vscode.commands.registerCommand("ctun.installSkill", () => offerSkillInstall(createCtun(), () => setup.refresh())),
     vscode.commands.registerCommand("ctun.showJobs", showJobs),

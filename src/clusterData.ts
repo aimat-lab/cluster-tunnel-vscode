@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { ClusterStatus, Ctun, CtunError, JobsReport } from "./ctun";
+import { ClusterStatus, Ctun, CtunError, JobsReport, ProjectsReport } from "./ctun";
 import type { ClusterJobs } from "./clusterSummary";
 import { CLUSTERS_VIEW_ID } from "./clustersView";
 
@@ -11,10 +11,14 @@ const FRESH_FOR_MS = 15_000;
  *
  * One refresh runs `ctun status -j`, a targeted `status` per live guarded
  * cluster (for its budget use) and one `ctun jobs list --json` over all clusters.
+ * `ctun projects list --json` reads every record, and projects rarely change, so
+ * it runs only on the first refresh and on `refreshWithProjects`.
  */
 export class ClusterData implements vscode.Disposable {
   statuses: ClusterStatus[] = [];
   jobs: JobsReport | undefined;
+  /** Every project of all time, for the Projects view; the jobs are only those of the `since` window. */
+  projects: ProjectsReport | undefined;
   /** The error of the last refresh, if it failed as a whole. */
   error: CtunError | undefined;
   updatedAt: Date | undefined;
@@ -26,6 +30,8 @@ export class ClusterData implements vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChange = this.changed.event;
   private pendingRefresh: Promise<void> | undefined;
+  /** Set by `refreshWithProjects`: the next refresh also reloads the projects. */
+  private projectsWanted = false;
 
   constructor(private readonly ctun: () => Ctun) {}
 
@@ -35,6 +41,13 @@ export class ClusterData implements vscode.Disposable {
       this.pendingRefresh = undefined;
     });
     return this.pendingRefresh;
+  }
+
+  /** Refreshes the projects too, e.g. after an edit or on the Refresh button; waits for a running refresh first. */
+  async refreshWithProjects(): Promise<void> {
+    await this.pendingRefresh;
+    this.projectsWanted = true;
+    await this.refresh();
   }
 
   /** Refreshes unless the last refresh is younger than `FRESH_FOR_MS`, e.g. when a tab comes back into view. */
@@ -62,8 +75,10 @@ export class ClusterData implements vscode.Disposable {
 
   private async load(): Promise<void> {
     const ctun = this.ctun();
+    const loadsProjects = this.projects === undefined || this.projectsWanted;
+    this.projectsWanted = false;
     try {
-      await Promise.all([this.loadStatuses(ctun), this.loadJobs(ctun)]);
+      await Promise.all([this.loadStatuses(ctun), this.loadJobs(ctun), ...(loadsProjects ? [this.loadProjects(ctun)] : [])]);
       this.error = undefined;
       this.updatedAt = new Date();
     } catch (error) {
@@ -90,6 +105,11 @@ export class ClusterData implements vscode.Disposable {
         return measured ?? status;
       }),
     );
+  }
+
+  private async loadProjects(ctun: Ctun): Promise<void> {
+    this.projects = await ctun.projects();
+    this.changed.fire();
   }
 
   private async loadJobs(ctun: Ctun): Promise<void> {

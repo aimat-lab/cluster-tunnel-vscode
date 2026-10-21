@@ -21,6 +21,10 @@ test("passes a job edit as one option per field, so a value may start with a das
   assert.deepStrictEqual(noted, ["-t", "haicore", "jobs", "edit", "51319", "--note=-lr halved", "--confirm-note"]);
 });
 
+test("lists the projects of all time", async () => {
+  assert.deepStrictEqual(await fakeCtun("echo-args").projects(), ["projects", "list", "--json"]);
+});
+
 test("sends input on stdin, not in argv", async () => {
   const secret = JSON.stringify({ password: "s3cret" });
   const output = await fakeCtun("echo-stdin").run(["-t", "haicore", "login", "--credentials-stdin"], { input: secret });

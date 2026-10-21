@@ -39,6 +39,9 @@ All notable changes to the ctun VS Code extension. The format follows
   existing, Unassigned or new project) and **Edit Note…** run `ctun jobs edit`,
   from the selection bar or a row's context menu. A job's details list the
   record's edits; a record that `jobs edit` made without facts says so.
+- Projects view: it lists every project of all time from `ctun projects list`,
+  with all-time job counts, not only those of the "Ended in" window; Unassigned
+  still counts the window's jobs.
 - Setup view: the ctun row shows ctun's version and marks one older than 0.9.0.
 - Job details: commit, pushed or not, uncommitted files, submitting machine, the
   previous run of the same job and the commits since it.

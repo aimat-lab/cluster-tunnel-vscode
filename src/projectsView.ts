@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { ClusterData } from "./clusterData";
 import type { HiddenProjects } from "./hiddenProjects";
-import { bandLabel, jobKeysIn, projectCounts, projectLabel, sortProjects } from "./jobsTable";
+import { allTimeProjectCounts, bandLabel, jobKeysIn, projectLabel, sortProjects, UNASSIGNED } from "./jobsTable";
 import { isHiddenBy, parentProject, totalsWithNested } from "./projectTree";
 
 /** The "All projects" row; `\0` is never part of a project name. */
@@ -11,7 +11,8 @@ const ALL_PROJECTS = "\0all";
 export const JOBS_DRAG_MIME = "application/vnd.ctun.jobs";
 
 /**
- * The Projects tree under Clusters: job counts per project, nested ones included.
+ * The Projects tree under Clusters: every project of all time with its job count,
+ * nested ones included.
  * An eye hides a project and everything below it in the job list; a click on a
  * name shows only that project and those below it in the job list; "All projects"
  * shows every project again.
@@ -46,8 +47,9 @@ export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.Tre
 
   private allProjectsItem(): vscode.TreeItem {
     const item = new vscode.TreeItem("All projects");
-    const allJobs = [...projectCounts(this.data.jobs).values()].reduce((sum, count) => sum + count, 0);
-    item.description = String(allJobs);
+    const totals = this.totals();
+    const topLevel = [...totals.keys()].filter((project) => parentProject(project) === undefined);
+    item.description = String(topLevel.reduce((sum, project) => sum + (totals.get(project) ?? 0), 0));
     item.iconPath = new vscode.ThemeIcon("list-flat");
     item.tooltip = "Show every project";
     item.command = { command: "ctun.showAllProjects", title: "Show every project" };
@@ -63,9 +65,13 @@ export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.Tre
       hasChildren ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
     );
     item.id = project; // keeps a project open across refreshes
-    item.tooltip = `Show only ${projectLabel(project)}`;
     item.command = { command: "ctun.showOnlyProject", title: "Show only this project", arguments: [project] };
-    item.description = String(totals.get(project) ?? 0);
+    const jobCount = totals.get(project) ?? 0;
+    item.tooltip =
+      project === UNASSIGNED
+        ? `${jobCount} jobs without a project in the "Ended in" window. Show only them.`
+        : `${jobCount} jobs of all time. Show only ${projectLabel(project)}; the table lists the jobs of the "Ended in" window.`;
+    item.description = String(jobCount);
     item.iconPath = new vscode.ThemeIcon("folder");
     item.contextValue = isHiddenBy(project, this.hiddenProjects.all()) ? "project-hidden" : "project-shown";
     return item;
@@ -86,8 +92,8 @@ export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.Tre
     return [...this.totals().keys()];
   }
 
-  /** Jobs per project, counting those in nested projects too. */
+  /** Jobs per project of all time, counting those in nested projects too. */
   private totals(): Map<string, number> {
-    return totalsWithNested(projectCounts(this.data.jobs));
+    return totalsWithNested(allTimeProjectCounts(this.data.projects, this.data.jobs));
   }
 }

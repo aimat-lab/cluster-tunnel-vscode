@@ -1,5 +1,5 @@
 import type { DetailLine } from "./addOns";
-import type { ClusterJobsEntry, ClusterStatus, Job, JobRecord, JobsReport, RecordChange } from "./ctun";
+import type { ClusterJobsEntry, ClusterStatus, Job, JobRecord, JobsReport, ProjectsReport, RecordChange } from "./ctun";
 import { baseState, STATE_GROUPS, StateGroupId, stateGroup } from "./jobStates";
 import {
   isHiddenBy,
@@ -207,6 +207,26 @@ export function projectCounts(report: JobsReport | undefined): Map<string, numbe
   for (const { job } of liveJobs(report)) {
     const project = projectOf(job.record);
     counts.set(project, (counts.get(project) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Jobs per project of all time, summed over the clusters, for the Projects view.
+ * Unassigned counts the jobs of the `since` window, since records without a
+ * project are not listed and jobs without a record have none.
+ */
+export function allTimeProjectCounts(projects: ProjectsReport | undefined, jobs: JobsReport | undefined): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const entry of projects?.clusters ?? []) {
+    for (const { project, jobs: jobCount } of entry.projects) {
+      const name = normalizeProject(project) || UNASSIGNED;
+      counts.set(name, (counts.get(name) ?? 0) + jobCount);
+    }
+  }
+  const unassigned = projectCounts(jobs).get(UNASSIGNED);
+  if (unassigned !== undefined) {
+    counts.set(UNASSIGNED, unassigned);
   }
   return counts;
 }

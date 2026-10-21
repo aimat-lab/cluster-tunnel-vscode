@@ -93,6 +93,17 @@ export interface JobsReport {
   clusters: ClusterJobsEntry[];
 }
 
+/** The output of `ctun projects list --json`: every project in each live cluster's job records. */
+export interface ProjectsReport {
+  clusters: {
+    cluster: string;
+    live: boolean;
+    error: string | null;
+    /** Sorted by name; jobs without a project are not counted. */
+    projects: { project: string; jobs: number }[];
+  }[];
+}
+
 /** One command of `ctun -t X logs --json`. */
 export interface LoggedCommand {
   epoch: number;
@@ -177,6 +188,11 @@ export class Ctun {
   /** `since` is a ctun duration such as `24h`; `0` skips finished jobs. */
   jobs(since: string): Promise<JobsReport> {
     return this.json<JobsReport>(["jobs", "list", "--json", "--since", since]);
+  }
+
+  /** Every project in the job records of each live cluster, however old; reads every record. */
+  projects(): Promise<ProjectsReport> {
+    return this.json<ProjectsReport>(["projects", "list", "--json"]);
   }
 
   /** Gives the jobs `jobIds` of `cluster` the same edit in their records on the cluster; returns the records after it. */

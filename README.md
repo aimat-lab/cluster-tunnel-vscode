@@ -12,7 +12,9 @@ straight to ctun's stdin.
   Log in asks for the budget, OTP and password in VS Code input boxes, or opens
   ctun's own login window (`ctun.login.method`); log out closes the tunnel.
   `ctun login -i` run by an agent or in a terminal of the window asks there too.
-  Below it, **Projects** lists the jobs per `--project` of ctun's job record. The eye next to a project
+  Below it, **Projects** lists every project in ctun's job records, of all time
+  (`ctun projects list`), with its number of jobs; Unassigned counts the jobs of
+  the "Ended in" window. The eye next to a project
   hides its jobs, and those of every project below it, in the job list; hidden
   projects stay hidden across restarts (Settings Sync carries them). Opening the
   eye of a project below a hidden one shows just that project. A click on a name

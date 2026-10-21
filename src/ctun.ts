@@ -98,9 +98,23 @@ export interface ProjectsReport {
   clusters: {
     cluster: string;
     live: boolean;
+    /** False for a cluster configured without records; ctun skips it. */
+    job_records: boolean;
     error: string | null;
     /** Sorted by name; jobs without a project are not counted. */
     projects: { project: string; jobs: number }[];
+  }[];
+}
+
+/** The output of `ctun projects rename --json`: the jobs whose project each live cluster renamed. */
+export interface ProjectRenameReport {
+  clusters: {
+    cluster: string;
+    live: boolean;
+    /** False for a cluster configured without records; ctun skips it. */
+    job_records: boolean;
+    error: string | null;
+    renamed: string[];
   }[];
 }
 
@@ -156,7 +170,7 @@ export class CtunError extends Error {
 }
 
 export const DEFAULT_TIMEOUT_MS = 60_000;
-/** `jobs edit` reads, checks and writes each job's record over SSH: a few round trips per job. */
+/** `jobs edit` and `projects rename` read, check and write each job's record over SSH: a few round trips per job. */
 const EDIT_TIMEOUT_PER_JOB_MS = 10_000;
 
 export interface RunOptions {
@@ -204,6 +218,12 @@ export class Ctun {
     ];
     const timeoutMs = this.timeoutMs + jobIds.length * EDIT_TIMEOUT_PER_JOB_MS;
     return this.json<JobRecord[]>([...target(cluster), "jobs", "edit", ...jobIds, ...options], { timeoutMs });
+  }
+
+  /** Renames `project`, with the projects nested in it, in the records of its `jobCount` jobs on every live cluster. */
+  renameProject(project: string, renamed: string, jobCount: number): Promise<ProjectRenameReport> {
+    const timeoutMs = this.timeoutMs + jobCount * EDIT_TIMEOUT_PER_JOB_MS;
+    return this.json<ProjectRenameReport>(["projects", "rename", "--json", "--", project, renamed], { timeoutMs });
   }
 
   /** The commands sent to `cluster` this session; a local file read, no SSH. */

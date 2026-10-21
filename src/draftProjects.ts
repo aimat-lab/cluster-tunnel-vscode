@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { withoutNested } from "./projectTree";
+import { withoutNested, withRenamed } from "./projectTree";
 
 /** Where draft projects are kept: the extension's `globalState`, which Settings Sync carries. */
 export const DRAFT_PROJECTS_STATE_KEY = "ctun.draftProjects";
@@ -26,6 +26,11 @@ export class DraftProjects implements vscode.Disposable {
   /** Removes `project` and every draft nested in it. */
   remove(project: string): Promise<void> {
     return this.store(withoutNested(this.all(), project));
+  }
+
+  /** Renames `project` and every draft nested in it. */
+  rename(project: string, renamed: string): Promise<void> {
+    return this.store(withRenamed(this.all(), project, renamed));
   }
 
   dispose(): void {

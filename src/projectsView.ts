@@ -3,7 +3,7 @@ import type { ClusterData } from "./clusterData";
 import type { DraftProjects } from "./draftProjects";
 import type { HiddenProjects } from "./hiddenProjects";
 import { allTimeProjectCounts, bandLabel, jobKeysIn, projectLabel, sortProjects, UNASSIGNED } from "./jobsTable";
-import { isHiddenBy, parentProject, totalsWithNested } from "./projectTree";
+import { droppedProject, isHiddenBy, parentProject, totalsWithNested } from "./projectTree";
 
 /** The "All projects" row; `\0` is never part of a project name. */
 const ALL_PROJECTS = "\0all";
@@ -17,26 +17,31 @@ export const DRAFT_PROJECT_INFO =
 /** What the "Cluster jobs" tab puts in a drag of job rows: their row keys as a JSON list. */
 export const JOBS_DRAG_MIME = "application/vnd.ctun.jobs";
 
+/** What a drag of a project in this tree carries: its name. */
+const PROJECT_DRAG_MIME = "application/vnd.ctun.project";
+
 /**
  * The Projects tree under Clusters: every project of all time with its job count,
  * nested ones included.
  * An eye hides a project and everything below it in the job list; a click on a
  * name shows only that project and those below it in the job list; "All projects"
  * shows every project again. Draft projects, made here before any job is in them,
- * show with 0 jobs.
+ * show with 0 jobs. Dropping job rows on a project moves them there; dropping a
+ * project on another nests it there, and on "All projects" moves it to the top.
  */
 export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.TreeDragAndDropController<string> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
   /** `text/plain` too: a drag from a webview may reach the tree with only that type. */
-  readonly dropMimeTypes = [JOBS_DRAG_MIME, "text/plain"];
-  readonly dragMimeTypes = [];
+  readonly dropMimeTypes = [PROJECT_DRAG_MIME, JOBS_DRAG_MIME, "text/plain"];
+  readonly dragMimeTypes = [PROJECT_DRAG_MIME];
 
   constructor(
     private readonly data: ClusterData,
     private readonly hiddenProjects: HiddenProjects,
     private readonly draftProjects: DraftProjects,
     private readonly moveJobs: (keys: string[], project: string) => Promise<void>,
+    private readonly renameProject: (project: string, renamed: string) => Promise<void>,
   ) {
     data.onDidChange(() => this.changed.fire());
     hiddenProjects.onDidChange(() => this.changed.fire());
@@ -99,18 +104,46 @@ export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.Tre
         : `${jobCount} jobs of all time. Show only ${projectLabel(project)}; the table lists the jobs of the "Ended in" window.`;
     item.description = String(jobCount);
     item.iconPath = new vscode.ThemeIcon("folder");
-    item.contextValue = isHiddenBy(project, this.hiddenProjects.all()) ? "project-hidden" : "project-shown";
+    const eye = isHiddenBy(project, this.hiddenProjects.all()) ? "hidden" : "shown";
+    item.contextValue = project === UNASSIGNED ? `unassigned-${eye}` : `project-${eye}`; // Unassigned can't be renamed
     return item;
   }
 
-  /** Job rows dragged from the "Cluster jobs" tab onto a project move there. */
+  handleDrag(source: readonly string[], dataTransfer: vscode.DataTransfer): void {
+    const [project] = source;
+    if (project !== ALL_PROJECTS && project !== UNASSIGNED) {
+      dataTransfer.set(PROJECT_DRAG_MIME, new vscode.DataTransferItem(project));
+    }
+  }
+
+  /** A project dropped here is renamed into `target`; job rows dragged from the "Cluster jobs" tab move to it. */
   async handleDrop(target: string | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
+    const draggedProject = await dataTransfer.get(PROJECT_DRAG_MIME)?.asString();
+    if (draggedProject !== undefined) {
+      await this.dropProject(draggedProject, target);
+      return;
+    }
     const dragged = await (dataTransfer.get(JOBS_DRAG_MIME) ?? dataTransfer.get("text/plain"))?.asString();
     const keys = dragged === undefined ? undefined : jobKeysIn(dragged);
     if (target === undefined || target === ALL_PROJECTS || keys === undefined) {
       return;
     }
     await this.moveJobs(keys, target);
+  }
+
+  private async dropProject(project: string, target: string | undefined): Promise<void> {
+    if (target === UNASSIGNED) {
+      return;
+    }
+    const renamed = droppedProject(project, target === ALL_PROJECTS ? undefined : target);
+    if (renamed !== undefined) {
+      await this.renameProject(project, renamed);
+    }
+  }
+
+  /** The jobs of all time in `project` and the projects nested in it; 0 for a draft. */
+  jobCount(project: string): number {
+    return this.totals().get(project) ?? 0;
   }
 
   /** Every project with jobs in the report, and every project above one. */

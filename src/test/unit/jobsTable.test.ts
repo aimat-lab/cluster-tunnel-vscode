@@ -354,8 +354,8 @@ test("reads the job keys of a drag and ignores other text", () => {
 test("the Projects view counts named projects of all time and Unassigned in the window", () => {
   const projects = {
     clusters: [
-      { cluster: "haicore", live: true, error: null, projects: [{ project: "htfm", jobs: 40 }, { project: "old//sweep", jobs: 2 }] },
-      { cluster: "kcist", live: true, error: null, projects: [{ project: "htfm", jobs: 5 }] },
+      { cluster: "haicore", live: true, job_records: true, error: null, projects: [{ project: "htfm", jobs: 40 }, { project: "old//sweep", jobs: 2 }] },
+      { cluster: "kcist", live: true, job_records: true, error: null, projects: [{ project: "htfm", jobs: 5 }] },
     ],
   };
   assert.deepStrictEqual(

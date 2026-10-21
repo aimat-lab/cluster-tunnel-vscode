@@ -59,7 +59,11 @@ straight to ctun's stdin.
   selected project, or at the top level. While it has no jobs it is marked
   "draft": ctun stores a job's project in the job's record, so a project without
   jobs exists only in VS Code (Settings Sync carries it), and ctun and agents
-  don't see it. Its (i) explains this, and its trash icon deletes it. A bar also offers **Move to project…**: an existing project, Unassigned, or a new one (a
+  don't see it. Its (i) explains this, and its trash icon deletes it. Drag a
+  project onto another to nest it there, or onto **All projects** to move it to
+  the top level; a right-click offers **Rename Project…**. After your yes, both
+  run `ctun projects rename`, which changes the project of all its jobs, of all
+  time, and of the projects nested in it, on every connected cluster. A bar also offers **Move to project…**: an existing project, Unassigned, or a new one (a
   `/` nests it). A right-click on a row offers **Move to Project…** (for the
   selection, or that row alone) and **Edit Note…**. Each change runs one
   `ctun -t <cluster> jobs edit` per cluster and reloads the jobs. It is stored in the

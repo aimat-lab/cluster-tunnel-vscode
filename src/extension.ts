@@ -13,6 +13,7 @@ import { LoginMethod, logIn, logOut } from "./login";
 import { BRIDGE_VARIABLE, LoginAnswer, startLoginBridge } from "./loginBridge";
 import { DRAFT_PROJECTS_STATE_KEY, DraftProjects } from "./draftProjects";
 import { HIDDEN_PROJECTS_STATE_KEY, HiddenProjects } from "./hiddenProjects";
+import { askRenamedProject, ProjectRenameServices, renameProject } from "./projectRename";
 import { DRAFT_PROJECT_INFO, ProjectsView } from "./projectsView";
 import { SETUP_VIEW_ID, SetupView } from "./setupView";
 import { offerSkillInstall } from "./skillCommand";
@@ -28,8 +29,20 @@ export function activate(context: vscode.ExtensionContext): void {
   const pendingCount = () => pendingReviews(data.jobs).length;
 
   const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
-  const projectTree = new ProjectsView(data, hiddenProjects, draftProjects, async (keys, project) =>
-    JobsPanel.open?.moveJobs(keys, project),
+  const renameServices: ProjectRenameServices = {
+    data,
+    draftProjects,
+    hiddenProjects,
+    ctun: createCtun,
+    knownProjects: () => projectTree.knownProjects(),
+    jobCount: (project) => projectTree.jobCount(project),
+  };
+  const projectTree = new ProjectsView(
+    data,
+    hiddenProjects,
+    draftProjects,
+    async (keys, project) => JobsPanel.open?.moveJobs(keys, project),
+    (project, renamed) => renameProject(renameServices, project, renamed),
   );
   const projectsView = vscode.window.createTreeView("ctun.projects", {
     treeDataProvider: projectTree,
@@ -101,6 +114,12 @@ export function activate(context: vscode.ExtensionContext): void {
       if (project !== undefined) {
         await draftProjects.add(project);
         await projectsView.reveal(project, { select: true, expand: true });
+      }
+    }),
+    vscode.commands.registerCommand("ctun.renameProject", async (project: string) => {
+      const renamed = await askRenamedProject(project);
+      if (renamed !== undefined) {
+        await renameProject(renameServices, project, renamed);
       }
     }),
     vscode.commands.registerCommand("ctun.deleteDraftProject", (project: string) => draftProjects.remove(project)),

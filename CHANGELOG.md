@@ -46,6 +46,11 @@ All notable changes to the ctun VS Code extension. The format follows
   inside the selected one, to drop jobs on. Drafts are kept in `globalState`. A
   project without jobs is marked "draft", with an (i) that explains why and a
   trash icon that deletes it.
+- Projects view: drag a project onto another to nest it there, or onto "All
+  projects" to move it to the top; **Rename Project…** in its context menu
+  renames it. After a confirmation, both run `ctun projects rename`, so every
+  job of the project and of those nested in it follows, also outside the
+  "Ended in" window. Drafts and hidden projects follow too.
 - Setup view: the ctun row shows ctun's version and marks one older than 0.9.0.
 - Job details: commit, pushed or not, uncommitted files, submitting machine, the
   previous run of the same job and the commits since it.

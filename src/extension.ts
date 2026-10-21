@@ -30,7 +30,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
   const projectTree = new ProjectsView(data, hiddenProjects);
   const projectsView = vscode.window.createTreeView("ctun.projects", { treeDataProvider: projectTree });
-  const setup = new SetupView(data, addOns);
+  const setup = new SetupView(data, addOns, createCtun);
   const setupView = vscode.window.createTreeView(SETUP_VIEW_ID, { treeDataProvider: setup });
   const updateBadge = () => {
     const pending = pendingCount();

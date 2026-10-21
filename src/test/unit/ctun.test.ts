@@ -10,7 +10,7 @@ afterEach(() => {
 
 test("passes the arguments to ctun and parses its JSON", async () => {
   const report = await fakeCtun("echo-args").jobs("24h");
-  assert.deepStrictEqual(report, ["jobs", "--json", "--since", "24h"]);
+  assert.deepStrictEqual(report, ["jobs", "list", "--json", "--since", "24h"]);
 });
 
 test("sends input on stdin, not in argv", async () => {

@@ -1,6 +1,6 @@
 import type { ClusterStatus, CommandLog, Job, JobRecord, JobsReport } from "../../ctun";
 
-// Shaped like real `ctun status -j` / `ctun jobs --json` output.
+// Shaped like real `ctun status -j` / `ctun jobs list --json` output.
 
 export const GUARDED_STATUS: ClusterStatus = {
   cluster: "haicore",

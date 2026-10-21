@@ -2,7 +2,7 @@
 
 Shows your HPC clusters and Slurm jobs in VS Code, through the
 [`ctun`](https://github.com/aimat-lab/cluster-tunnel) CLI. The extension is a thin
-wrapper: every cluster value comes from `ctun` (`status -j`, `jobs --json`, `run`),
+wrapper: every cluster value comes from `ctun` (`status -j`, `jobs list --json`, `run`),
 and only optional add-ons such as W&B talk to other services, with your key. It has no SSH
 of its own. A password or OTP passes through it only with the VS Code login,
 straight to ctun's stdin.
@@ -78,10 +78,9 @@ without them show only the Slurm columns.
 
 ## Requirements
 
-- `ctun` with job records (newer than 0.5.0) for notes, projects and code facts, and
-  for the jobs under each command in the Commands tab; 0.5.0 shows the Slurm columns
-  and the bare commands only. W&B's cluster tags need a ctun whose `jobs --json`
-  reports `slurm_cluster`; an older one matches only `slurm:<job id>`. Configured (`ctun config --init`), on `PATH` or set in
+- `ctun` 0.9.0 or newer, with `ctun jobs list`, `ctun jobs edit` and `ctun projects list`; the Setup view
+  marks an older one. Until 0.9.0 is released, install it from the fork:
+  `uv tool install git+https://github.com/Luguza/cluster-tunnel@feat/vscode-extension`. Configured (`ctun config --init`), on `PATH` or set in
   `ctun.path`. On Windows, ctun runs ssh inside WSL 2; see ctun's README.
 - For the `window` login method: a display for ctun's login window (a small
   tkinter dialog).

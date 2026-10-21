@@ -35,7 +35,10 @@ export interface JobRecord {
   command: string[];
 }
 
-/** One job of `ctun jobs --json`; every Slurm field is a string as Slurm prints it. */
+/** The oldest ctun with `jobs list`, `jobs edit` and `projects`: the fork's next release, after upstream's 0.8.0. */
+export const MINIMUM_CTUN_VERSION = "0.9.0";
+
+/** One job of `ctun jobs list --json`; every Slurm field is a string as Slurm prints it. */
 export interface Job {
   source: "active" | "done";
   jobid: string;
@@ -51,7 +54,7 @@ export interface Job {
   record?: JobRecord | null;
 }
 
-/** One cluster's entry in `ctun jobs --json`. */
+/** One cluster's entry in `ctun jobs list --json`. */
 export interface ClusterJobsEntry {
   cluster: string;
   /** Slurm's ClusterName, which jobs see as `SLURM_CLUSTER_NAME`; absent from older ctun, null when unknown. */
@@ -64,7 +67,7 @@ export interface ClusterJobsEntry {
   records_error?: string | null;
 }
 
-/** The whole output of `ctun jobs --json`. */
+/** The whole output of `ctun jobs list --json`. */
 export interface JobsReport {
   since_minutes: number;
   clusters: ClusterJobsEntry[];
@@ -151,7 +154,7 @@ export class Ctun {
 
   /** `since` is a ctun duration such as `24h`; `0` skips finished jobs. */
   jobs(since: string): Promise<JobsReport> {
-    return this.json<JobsReport>(["jobs", "--json", "--since", since]);
+    return this.json<JobsReport>(["jobs", "list", "--json", "--since", since]);
   }
 
   /** The commands sent to `cluster` this session; a local file read, no SSH. */

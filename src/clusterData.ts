@@ -10,7 +10,7 @@ const FRESH_FOR_MS = 15_000;
  * The latest cluster statuses and jobs from ctun, shared by every view.
  *
  * One refresh runs `ctun status -j`, a targeted `status` per live guarded
- * cluster (for its budget use) and one `ctun jobs --json` over all clusters.
+ * cluster (for its budget use) and one `ctun jobs list --json` over all clusters.
  */
 export class ClusterData implements vscode.Disposable {
   statuses: ClusterStatus[] = [];
@@ -18,7 +18,7 @@ export class ClusterData implements vscode.Disposable {
   /** The error of the last refresh, if it failed as a whole. */
   error: CtunError | undefined;
   updatedAt: Date | undefined;
-  /** The finished-jobs window passed to `ctun jobs --since`. */
+  /** The finished-jobs window passed to `ctun jobs list --since`. */
   since = "24h";
   /** Clusters whose login window is open. */
   readonly loggingIn = new Set<string>();

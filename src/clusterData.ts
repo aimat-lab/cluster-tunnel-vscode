@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { ClusterStatus, Ctun, CtunError, JobsReport, ProjectsReport } from "./ctun";
 import type { ClusterJobs } from "./clusterSummary";
 import { CLUSTERS_VIEW_ID } from "./clustersView";
+import { ALL_TIME_SINCE, DEFAULT_FILTERS } from "./jobsTable";
 
 /** Data this young is shown as it is when a view comes back into sight; Refresh still reloads it. */
 const FRESH_FOR_MS = 15_000;
@@ -12,7 +13,8 @@ const FRESH_FOR_MS = 15_000;
  * One refresh runs `ctun status -j`, a targeted `status` per live guarded
  * cluster (for its budget use) and one `ctun jobs list --json` over all clusters.
  * `ctun projects list --json` reads every record, and projects rarely change, so
- * it runs only on the first refresh and on `refreshWithProjects`.
+ * it runs only on the first refresh and on `refreshWithProjects`. The jobs of an
+ * all-time window are as costly, so they reload only then and on `setSince`.
  */
 export class ClusterData implements vscode.Disposable {
   statuses: ClusterStatus[] = [];
@@ -23,7 +25,7 @@ export class ClusterData implements vscode.Disposable {
   error: CtunError | undefined;
   updatedAt: Date | undefined;
   /** The finished-jobs window passed to `ctun jobs list --since`. */
-  since = "24h";
+  since: string = DEFAULT_FILTERS.since;
   /** Clusters whose login window is open. */
   readonly loggingIn = new Set<string>();
 
@@ -32,6 +34,8 @@ export class ClusterData implements vscode.Disposable {
   private pendingRefresh: Promise<void> | undefined;
   /** Set by `refreshWithProjects`: the next refresh also reloads the projects. */
   private projectsWanted = false;
+  /** Set by `refreshWithProjects` and `setSince`: the next refresh also reloads all-time jobs. */
+  private jobsWanted = false;
 
   constructor(private readonly ctun: () => Ctun) {}
 
@@ -43,10 +47,19 @@ export class ClusterData implements vscode.Disposable {
     return this.pendingRefresh;
   }
 
-  /** Refreshes the projects too, e.g. after an edit or on the Refresh button; waits for a running refresh first. */
+  /** Refreshes the projects and all-time jobs too, e.g. after an edit or on the Refresh button; waits for a running refresh first. */
   async refreshWithProjects(): Promise<void> {
     await this.pendingRefresh;
     this.projectsWanted = true;
+    this.jobsWanted = true;
+    await this.refresh();
+  }
+
+  /** Switches to the window `since` and loads its jobs; waits for a running refresh first. */
+  async setSince(since: string): Promise<void> {
+    await this.pendingRefresh;
+    this.since = since;
+    this.jobsWanted = true;
     await this.refresh();
   }
 
@@ -76,9 +89,15 @@ export class ClusterData implements vscode.Disposable {
   private async load(): Promise<void> {
     const ctun = this.ctun();
     const loadsProjects = this.projects === undefined || this.projectsWanted;
+    const loadsJobs = this.jobs === undefined || this.jobsWanted || this.since !== ALL_TIME_SINCE;
     this.projectsWanted = false;
+    this.jobsWanted = false;
     try {
-      await Promise.all([this.loadStatuses(ctun), this.loadJobs(ctun), ...(loadsProjects ? [this.loadProjects(ctun)] : [])]);
+      await Promise.all([
+        this.loadStatuses(ctun),
+        ...(loadsJobs ? [this.loadJobs(ctun)] : []),
+        ...(loadsProjects ? [this.loadProjects(ctun)] : []),
+      ]);
       this.error = undefined;
       this.updatedAt = new Date();
     } catch (error) {

@@ -35,9 +35,10 @@ straight to ctun's stdin.
 - **Cluster jobs** tab: one list of the jobs on every connected cluster, grouped by
   project in indented bands (nested projects below their parent; a click on the
   arrow folds a band) and filtered by state (Running, Queued, Completed, Failed,
-  Cancelled), by an "Ended in" window (24 h, 7 d, 30 d), by cluster and by the
-  eyes in the Projects view. It refreshes
-  every 60 s while it is visible. A click on a column header sorts the jobs inside
+  Cancelled), by an "Ended in" window (24 h, 7 d by default, 30 d, or all time),
+  by cluster and by the eyes in the Projects view. It refreshes every 60 s while
+  it is visible; an all-time list reloads only on Refresh or after an edit,
+  since each load asks `sacct` for every job you ever ran. A click on a column header sorts the jobs inside
   each project by it (ascending, descending, then back to the default: newest start
   first). A click
   on a row, or Enter, opens its details:

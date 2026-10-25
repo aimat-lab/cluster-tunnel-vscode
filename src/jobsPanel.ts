@@ -222,10 +222,8 @@ export class JobsPanel {
   /** Applies new filters; refetches only when the window ctun needs changed. */
   private setFilters(filters: JobsFilters): void {
     this.filters = filters;
-    const since = effectiveSince(filters);
-    if (since !== this.services.data.since) {
-      this.services.data.since = since;
-      void this.refresh();
+    if (effectiveSince(filters) !== this.services.data.since) {
+      void this.refresh("newWindow");
     }
     this.post();
   }
@@ -422,10 +420,15 @@ export class JobsPanel {
     this.post();
   }
 
-  /** `ifStale` when the tab shows again, `jobs` for the timer and a new window, `withProjects` for Refresh and after an edit. */
-  private async refresh(scope: "ifStale" | "jobs" | "withProjects" = "jobs"): Promise<void> {
+  /** `ifStale` when the tab shows again, `jobs` for the timer, `newWindow` for a new window, `withProjects` for Refresh and after an edit. */
+  private async refresh(scope: "ifStale" | "jobs" | "newWindow" | "withProjects" = "jobs"): Promise<void> {
     const { data } = this.services;
-    const loads = { ifStale: () => data.refreshIfStale(), jobs: () => data.refresh(), withProjects: () => data.refreshWithProjects() };
+    const loads = {
+      ifStale: () => data.refreshIfStale(),
+      jobs: () => data.refresh(),
+      newWindow: () => data.setSince(effectiveSince(this.filters)),
+      withProjects: () => data.refreshWithProjects(),
+    };
     this.refreshing = true;
     this.post();
     try {

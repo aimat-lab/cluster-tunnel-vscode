@@ -10,7 +10,8 @@ All notable changes to the ctun VS Code extension. The format follows
 - Clusters view from `ctun status -j`: status, session start, budget used / limit,
   commands sent, running and queued jobs; log in (ctun's login window) and log out.
 - "Cluster jobs" tab from `ctun jobs list --json`: one list filtered by state toggles,
-  an "Ended in" window and cluster chips; refreshes every 60 s while visible.
+  an "Ended in" window (7 days by default, up to all time) and cluster chips;
+  refreshes every 60 s while visible, an all-time list only on Refresh.
 - Status-bar entry with the connected clusters and their budget use.
 - Every column of the job list sorts on a click of its header (ascending,
   descending, back to the default), inside each project band. By default the

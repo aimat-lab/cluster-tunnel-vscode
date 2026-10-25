@@ -12,10 +12,14 @@ import {
   treeOrder,
 } from "./projectTree";
 
+/** ctun's `--since` has no "unlimited", so ten years stand in for it. */
+export const ALL_TIME_SINCE = "520w";
+
 export const SINCE_OPTIONS = [
   { value: "24h", label: "Last 24 hours" },
   { value: "7d", label: "Last 7 days" },
   { value: "30d", label: "Last 30 days" },
+  { value: ALL_TIME_SINCE, label: "All time (refresh by hand)" },
 ] as const;
 
 /** The table's columns; each sorts its jobs by what it shows. */
@@ -55,7 +59,7 @@ export interface JobsFilters {
 
 export const DEFAULT_FILTERS: JobsFilters = {
   shownGroups: { running: true, queued: true, completed: true, failed: true, cancelled: true },
-  since: "24h",
+  since: "7d",
   cluster: ALL_CLUSTERS,
 };
 

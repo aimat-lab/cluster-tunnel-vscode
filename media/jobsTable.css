@@ -230,23 +230,12 @@ button:disabled { cursor: default; opacity: 0.6; }
 .group-completed, .group-other, .group-cancelled { --group-color: var(--muted); }
 .group-failed { --group-color: var(--failed); }
 
-/* While jobs drag, the rows fade, then the project bands slide in one after another in their place.
-   After the drop the rows fade back in. */
+/* While jobs drag, the folded list of every project takes the rows' place; the script lets the
+   bands glide between the two. */
 .targets-fold { display: none; }
-.dragging-jobs .rows-fold { opacity: 0; transition: opacity var(--fade-out-duration) ease; }
-.jobs-folded .rows-fold { display: none; }
-.jobs-folded .targets-fold { display: block; }
-.jobs-folded .targets-fold .group-row {
-  animation: band-in 200ms ease both;
-  animation-delay: calc(min(var(--band-index, 0), 12) * 18ms);
-}
-.unfolding .rows-fold { animation: rows-in var(--unfold-duration) ease both; }
-@keyframes band-in { from { opacity: 0; transform: translateY(-6px); } }
-@keyframes rows-in { from { opacity: 0; transform: translateY(-4px); } }
-.group-row { transition: background-color 120ms ease, outline-color 120ms ease; }
-@media (prefers-reduced-motion: reduce) {
-  .rows-fold, .group-row, .targets-fold .group-row { transition: none !important; animation: none !important; }
-}
+.dragging-jobs .rows-fold { display: none; }
+.dragging-jobs .targets-fold { display: block; }
+.group-row { position: relative; z-index: 1; transition: background-color 120ms ease, outline-color 120ms ease; }
 .drag-image { position: fixed; top: -1000px; left: 0; display: flex; flex-direction: column; gap: 3px; }
 .drag-card {
   padding: 4px 10px;

@@ -12,10 +12,10 @@
   /** Pixels a nesting level indents a band's name and a job's ID. */
   const INDENT_STEP = 16;
   const MIN_COLUMN_WIDTH = 60;
-  /** How long the job rows fade before the project bands take their place; the CSS fade lasts as long. */
-  const FADE_OUT_MS = 140;
-  /** How long the job rows take to come back after a drag; the CSS `rows-in` animation lasts as long. */
-  const UNFOLD_MS = 220;
+  /** How long the project bands glide between the full table and the folded list. */
+  const FOLD_MS = 260;
+  /** Starts fast and settles gently, like VS Code's own list motion. */
+  const FOLD_EASING = "cubic-bezier(0.2, 0, 0, 1)";
   /** The width Note keeps however narrow the tab gets. */
   const FLEXIBLE_MIN_WIDTH = 160;
   /** The last model, for the drag image, a live column resize and the column menu. */
@@ -309,6 +309,7 @@
   function projectBand(band) {
     const row = el("div", band.depth === 0 ? "group-row top-level" : "group-row");
     row.setAttribute("role", "row");
+    row.dataset.project = band.project;
     row.style.setProperty("--depth", String(band.depth));
     const fold = button("fold", undefined, { type: "toggleProject", project: band.project });
     fold.append(icon("chevron", "chevron"));
@@ -351,31 +352,57 @@
       document.body.append(image);
       event.dataTransfer.setDragImage(image, 16, 16);
       drag = { scrollY: window.scrollY, deferredMessage: undefined };
-      // Changing the dragged row inside dragstart would cancel the drag, so fade just after it,
-      // then swap the rows for the bands, which slide in one after another.
+      // Changing the dragged row inside dragstart would cancel the drag, so fold just after it.
       setTimeout(() => {
         image.remove();
-        app.classList.add("dragging-jobs");
-        setTimeout(() => {
-          if (!drag || drag.ending) return;
-          app.classList.add("jobs-folded");
-          app.querySelector(".grid")?.scrollIntoView({ block: "start", behavior: "smooth" });
-        }, FADE_OUT_MS);
+        glide(".rows-fold .group-row", ".targets-fold .group-row", () => {
+          app.classList.add("dragging-jobs");
+          app.querySelector(".grid")?.scrollIntoView({ block: "start" });
+        });
       });
     });
-    // The rows fade back in; a model that came meanwhile renders after that, so it does not cut the animation.
+    // A model that came during the drag renders once the bands have settled, so it does not cut the motion.
     row.addEventListener("dragend", () => {
-      drag.ending = true;
-      app.classList.remove("dragging-jobs", "jobs-folded");
-      app.classList.add("unfolding");
+      const { scrollY } = drag;
+      glide(".targets-fold .group-row", ".rows-fold .group-row", () => {
+        app.classList.remove("dragging-jobs");
+        window.scrollTo(0, scrollY);
+      });
       setTimeout(() => {
-        const { scrollY, deferredMessage } = drag;
+        const { deferredMessage } = drag;
         drag = undefined;
-        app.classList.remove("unfolding");
         if (deferredMessage) render(deferredMessage);
-        window.scrollTo({ top: scrollY, behavior: "smooth" });
-      }, UNFOLD_MS);
+      }, FOLD_MS);
     });
+  }
+
+  /**
+   * Switches the table with `change` and lets each project band glide from where it was to
+   * where it now is (FLIP): only the bands move, on the compositor, so a long table stays smooth.
+   * A band that was not there fades in; one far off screen starts just past its edge.
+   */
+  function glide(fromSelector, toSelector, change) {
+    const before = new Map([...app.querySelectorAll(fromSelector)].map((band) => [band.dataset.project, band.getBoundingClientRect().top]));
+    change();
+    if (prefersReducedMotion()) return;
+    const limit = window.innerHeight;
+    for (const band of app.querySelectorAll(toSelector)) {
+      if (typeof band.animate !== "function") return;
+      const top = band.getBoundingClientRect().top;
+      const old = before.get(band.dataset.project);
+      const timing = { duration: FOLD_MS, easing: FOLD_EASING };
+      if (old === undefined) {
+        band.animate([{ opacity: 0 }, { opacity: 1 }], timing);
+      } else {
+        const offset = Math.max(-limit, Math.min(limit, old - top));
+        band.animate([{ transform: `translateY(${offset}px)` }, { transform: "none" }], timing);
+      }
+    }
+  }
+
+  function prefersReducedMotion() {
+    const systemReduces = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return systemReduces || document.body.classList.contains("vscode-reduce-motion");
   }
 
   const DRAG_IMAGE_ROWS = 3;
@@ -674,15 +701,15 @@
   function dropTargets() {
     const body = el("div", "drop-targets");
     body.setAttribute("role", "rowgroup");
-    model.dropTargets.forEach((target, index) => {
+    for (const target of model.dropTargets) {
       const row = el("div", target.depth === 0 ? "group-row top-level" : "group-row");
       row.setAttribute("role", "row");
       row.style.setProperty("--depth", String(target.depth));
-      row.style.setProperty("--band-index", String(index));
+      row.dataset.project = target.project;
       row.append(icon("chevron", "chevron"), el("strong", "", target.label));
       acceptJobDrops(row, target.project);
       body.append(row);
-    });
+    }
     return body;
   }
 
@@ -738,8 +765,6 @@
     shownRows = model.groups.flatMap((band) => band.rows);
     const focusedKey = /** @type {HTMLElement | null} */ (document.activeElement)?.dataset?.key;
     app.style.setProperty("--indent-step", `${INDENT_STEP}px`);
-    app.style.setProperty("--fade-out-duration", `${FADE_OUT_MS}ms`);
-    app.style.setProperty("--unfold-duration", `${UNFOLD_MS}ms`);
     app.replaceChildren(toolbar(message.refreshing));
     if (message.error) app.append(el("p", "notice error", `ctun failed: ${message.error}`));
     app.append(model.mode === "review" ? reviewView() : table());

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { AddOnRegistry } from "./addOnRegistry";
 import type { ClusterData } from "./clusterData";
+import type { Ctun } from "./ctun";
 import type { LoginMethod } from "./login";
 import { SetupCheck, SetupHealth, setupChecks } from "./setupChecks";
 import { globalSkillDir, isSkillInstalled } from "./skill";
@@ -18,10 +19,13 @@ const HEALTH_ICONS: Record<Exclude<SetupHealth, "plain">, vscode.ThemeIcon> = {
 export class SetupView implements vscode.TreeDataProvider<SetupCheck> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
+  /** `ctun --version` of the last `ctun.path`, asked once per path; undefined when it failed. */
+  private version: { ctunPath: string; value: Promise<string | undefined> } | undefined;
 
   constructor(
     private readonly data: ClusterData,
     private readonly addOns: AddOnRegistry,
+    private readonly ctun: () => Ctun,
   ) {
     data.onDidChange(() => this.changed.fire());
     addOns.onDidChange(() => this.changed.fire());
@@ -33,15 +37,24 @@ export class SetupView implements vscode.TreeDataProvider<SetupCheck> {
     this.changed.fire();
   }
 
+  private ctunVersion(ctunPath: string): Promise<string | undefined> {
+    if (this.version?.ctunPath !== ctunPath) {
+      this.version = { ctunPath, value: this.ctun().version().catch(() => undefined) };
+    }
+    return this.version.value;
+  }
+
   async getChildren(check?: SetupCheck): Promise<SetupCheck[]> {
     if (check !== undefined) {
       return check.children ?? [];
     }
     const settings = vscode.workspace.getConfiguration("ctun");
+    const ctunPath = settings.get<string>("path") || "ctun";
     const skillDir = globalSkillDir();
     const addOnChecks = await Promise.all(this.addOns.all().flatMap((addOn) => (addOn.setupCheck ? [addOn.setupCheck()] : [])));
     return setupChecks({
-      ctunPath: settings.get<string>("path") || "ctun",
+      ctunPath,
+      ctunVersion: await this.ctunVersion(ctunPath),
       refreshed: this.data.updatedAt !== undefined || this.data.error !== undefined,
       ctunError: this.data.error,
       clusterCount: this.data.statuses.length,

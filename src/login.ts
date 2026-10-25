@@ -74,7 +74,7 @@ export async function logIn(
     return loginFailed(cluster, error);
   } finally {
     data.loggingIn.delete(cluster);
-    await data.refresh();
+    await data.refreshWithProjects();
   }
 }
 
@@ -84,7 +84,7 @@ export async function logOut(ctun: Ctun, data: ClusterData, cluster: string): Pr
   } catch (error) {
     showCtunError(`Logout from ${cluster} failed`, error);
   }
-  await data.refresh();
+  await data.refreshWithProjects();
 }
 
 /** Asks for the session budget, then the OTP and the password the cluster needs; undefined if cancelled. */

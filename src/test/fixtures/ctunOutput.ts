@@ -1,6 +1,6 @@
 import type { ClusterStatus, CommandLog, Job, JobRecord, JobsReport } from "../../ctun";
 
-// Shaped like real `ctun status -j` / `ctun jobs --json` output.
+// Shaped like real `ctun status -j` / `ctun jobs list --json` output.
 
 export const GUARDED_STATUS: ClusterStatus = {
   cluster: "haicore",
@@ -41,6 +41,7 @@ export function record(jobId: string, overrides: Partial<JobRecord> = {}): JobRe
     job_name: "train",
     project: "htfm",
     note: null,
+    note_confirmed: false,
     submitted_at: "2026-10-12T10:00:00+00:00",
     submitted_from: "laptop",
     code: {
@@ -51,7 +52,26 @@ export function record(jobId: string, overrides: Partial<JobRecord> = {}): JobRe
       uncommitted: [],
     },
     command: ["./submit.sh"],
+    changes: [],
     ...overrides,
+  };
+}
+
+/** A record `ctun jobs edit` made for a job submitted with plain `sbatch`: a project, no facts. */
+export function recordWithoutFacts(jobId: string, project: string): JobRecord {
+  return {
+    schema_version: 1,
+    slurm_cluster: null,
+    job_id: jobId,
+    job_name: null,
+    project,
+    note: null,
+    note_confirmed: false,
+    submitted_at: null,
+    submitted_from: null,
+    code: {},
+    command: [],
+    changes: [{ at: "2026-10-20T14:36:00+00:00", from: "laptop", project: [null, project] }],
   };
 }
 
@@ -85,6 +105,11 @@ export const JOBS: Job[] = [
   job("93", "OUT_OF_MEMORY", "done"),
   job("94", "CANCELLED by 504768", "done"),
 ];
+
+/** `JOBS_REPORT` with `jobs` in place of its haicore jobs. */
+export function reportWith(jobs: Job[]): JobsReport {
+  return { ...JOBS_REPORT, clusters: [{ ...JOBS_REPORT.clusters[0], jobs }, JOBS_REPORT.clusters[1]] };
+}
 
 export const JOBS_REPORT: JobsReport = {
   since_minutes: 1440,

@@ -6,6 +6,10 @@
   const vscode = acquireVsCodeApi();
   const app = /** @type {HTMLElement} */ (document.getElementById("app"));
   const COLUMN_COUNT = 6;
+  /** JOBS_DRAG_MIME in src/projectsView.ts: the Projects view accepts drops of this type. */
+  const JOBS_DRAG_MIME = "application/vnd.ctun.jobs";
+  /** The rows of the last model, for the drag image. */
+  let shownRows = [];
   /** Row keys whose commit list is open; kept here so a re-render does not close it. */
   const openCommitLists = new Set();
   /** The serial of the last reveal request the table scrolled to. */
@@ -119,20 +123,81 @@
     if (band.note) title.append(el("span", "muted", band.note));
     const tr = fullWidthRow(band.depth === 0 ? "group-row top-level" : "group-row", title);
     tr.style.setProperty("--depth", String(band.depth));
+    acceptJobDrops(tr, band.project);
     return tr;
   }
 
-  /** A job's row; a click or Enter/Space opens or closes its details, unless the click selected text. */
+  /** A project band takes dragged jobs: they move to its project. */
+  function acceptJobDrops(tr, project) {
+    const carriesJobs = (event) => event.dataTransfer?.types.includes(JOBS_DRAG_MIME);
+    tr.addEventListener("dragover", (event) => {
+      if (!carriesJobs(event)) return;
+      event.preventDefault();
+      tr.classList.add("drop-target");
+    });
+    tr.addEventListener("dragleave", () => tr.classList.remove("drop-target"));
+    tr.addEventListener("drop", (event) => {
+      if (!carriesJobs(event)) return;
+      event.preventDefault();
+      tr.classList.remove("drop-target");
+      vscode.postMessage({ type: "dropOnProject", keys: JSON.parse(event.dataTransfer.getData(JOBS_DRAG_MIME)), project });
+    });
+  }
+
+  /** A selected row drags the whole selection, shown as a stack of cards under the cursor. */
+  function dragSelection(tr) {
+    tr.draggable = true;
+    tr.addEventListener("dragstart", (event) => {
+      const selected = shownRows.filter((row) => row.selected);
+      const keys = JSON.stringify(selected.map((row) => row.key));
+      event.dataTransfer.setData(JOBS_DRAG_MIME, keys);
+      event.dataTransfer.setData("text/plain", keys);
+      event.dataTransfer.effectAllowed = "move";
+      const image = dragImage(selected);
+      document.body.append(image);
+      event.dataTransfer.setDragImage(image, 16, 16);
+      setTimeout(() => image.remove());
+    });
+  }
+
+  const DRAG_IMAGE_ROWS = 3;
+
+  /** The first jobs as cards, and how many more follow. */
+  function dragImage(rows) {
+    const stack = el("div", "drag-image");
+    for (const row of rows.slice(0, DRAG_IMAGE_ROWS)) {
+      const card = el("div", "drag-card");
+      card.append(el("span", "mono muted", `${row.cluster} · ${row.id}`), " ", el("span", "mono", row.name));
+      stack.append(card);
+    }
+    if (rows.length > DRAG_IMAGE_ROWS) stack.append(el("div", "drag-more", `+ ${rows.length - DRAG_IMAGE_ROWS} more`));
+    return stack;
+  }
+
+  /**
+   * A job's row. A click or Enter/Space opens or closes its details, unless the click
+   * selected text; Ctrl-click (Cmd on macOS) and Shift-click select rows, and a selected
+   * row drags the selection. A right-click opens VS Code's context menu for the row.
+   */
   function jobRow(row, depth) {
-    const tr = el("tr", row.expanded ? "job expanded" : "job");
+    const tr = el("tr", ["job", row.expanded && "expanded", row.selected && "selected"].filter(Boolean).join(" "));
     tr.style.setProperty("--depth", String(depth));
     tr.dataset.rowKey = row.key;
+    tr.dataset.vscodeContext = JSON.stringify({ webviewSection: "job", jobKey: row.key, preventDefaultContextMenuItems: true });
     tr.tabIndex = 0;
     tr.setAttribute("aria-expanded", String(row.expanded));
+    tr.setAttribute("aria-selected", String(row.selected));
     tr.title = row.expanded ? "Hide details" : "Show details";
+    if (row.selected) dragSelection(tr);
     const toggle = () => vscode.postMessage({ type: "expand", key: row.key });
-    tr.addEventListener("click", () => {
-      if (!window.getSelection()?.toString()) toggle();
+    // A Shift-click would otherwise select the text between the two clicks.
+    tr.addEventListener("mousedown", (event) => {
+      if (event.shiftKey) event.preventDefault();
+    });
+    tr.addEventListener("click", (event) => {
+      if (event.ctrlKey || event.metaKey) vscode.postMessage({ type: "select", key: row.key, extend: "toggle" });
+      else if (event.shiftKey) vscode.postMessage({ type: "select", key: row.key, extend: "range" });
+      else if (!window.getSelection()?.toString()) toggle();
     });
     tr.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
@@ -147,7 +212,7 @@
     const name = el("div", "mono name", row.name);
     name.title = row.name;
     nameCell.append(name);
-    if (row.note && row.note.status !== "discarded") {
+    if (row.note) {
       const note = el("div", "note-preview");
       if (row.note.status === "unreviewed") note.append(el("span", "tag", "unreviewed"), " ");
       note.append(row.note.preview);
@@ -184,12 +249,12 @@
     return tr;
   }
 
-  function reviewButtons(reviewKey) {
+  function reviewButtons(key) {
     const actions = el("div", "review-actions");
     actions.append(
-      button("primary", "Confirm", { type: "review", reviewKey, action: "confirm" }),
-      button("secondary", "Edit", { type: "review", reviewKey, action: "edit" }),
-      button("secondary", "Discard", { type: "review", reviewKey, action: "discard" }),
+      button("primary", "Confirm", { type: "review", key, action: "confirm" }),
+      button("secondary", "Edit", { type: "review", key, action: "edit" }),
+      button("secondary", "Discard", { type: "review", key, action: "discard" }),
     );
     return actions;
   }
@@ -200,12 +265,11 @@
     list.append(el("dt", "", term), dd);
   }
 
-  function noteDetail(note) {
+  function noteDetail(key, note) {
     const box = el("div", `note-box status-${note.status}`);
-    box.append(el("div", "note-status", note.statusLabel));
-    if (note.status !== "discarded") box.append(el("p", "note-text", note.text));
-    if (note.status === "unreviewed") box.append(reviewButtons(note.reviewKey));
-    else if (note.status !== "discarded") box.append(button("link-button", "Edit", { type: "review", reviewKey: note.reviewKey, action: "edit" }));
+    box.append(el("div", "note-status", note.statusLabel), el("p", "note-text", note.text));
+    if (note.status === "unreviewed") box.append(reviewButtons(key));
+    else box.append(button("link-button", "Edit", { type: "review", key, action: "edit" }));
     return box;
   }
 
@@ -276,12 +340,19 @@
     const list = el("dl", "details");
     if (!details.hasRecord) {
       detailItem(list, "Record", el("span", "muted", "No job record: submitted without ctun run, or before records existed."));
+    } else if (!details.hasFacts) {
+      detailItem(list, "Record", el("span", "muted", "Made by ctun jobs edit: no commit or submit time."));
     }
-    if (row.note) detailItem(list, "Note", noteDetail(row.note));
+    if (row.note) detailItem(list, "Note", noteDetail(row.key, row.note));
     if (details.code) detailItem(list, "Code", codeDetail(details.code));
     if (details.from) detailItem(list, "From", details.from);
     if (details.previous) detailItem(list, "Changes", changesDetail(row, details));
     addOnDetails(list, details.addOnLines);
+    if (details.edits.length) {
+      const edits = el("ul", "edits");
+      for (const edit of details.edits) edits.append(el("li", "small", edit));
+      detailItem(list, "Edits", edits);
+    }
     return fullWidthRow("details-row", list);
   }
 
@@ -297,8 +368,22 @@
     return th;
   }
 
+  /** What to do with the Ctrl/Shift-selected rows; absent while none is selected. */
+  function selectionBar(model) {
+    const bar = el("div", "selection-bar");
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "Selected jobs");
+    bar.append(
+      el("span", "", `${model.selectedCount} selected`),
+      button("primary", "Move to project…", { type: "moveToProject" }),
+      button("secondary", "Clear", { type: "clearSelection" }),
+    );
+    return bar;
+  }
+
   function table(model) {
     const wrapper = el("div", "table-wrapper");
+    if (model.selectedCount > 0) wrapper.append(selectionBar(model));
     const tableNode = el("table");
     tableNode.setAttribute("aria-label", "Cluster jobs");
     const head = el("thead");
@@ -337,7 +422,7 @@
     const top = el("div", "review-top");
     top.append(
       button("secondary", "Back to all jobs", { type: "setMode", mode: "jobs" }),
-      el("p", "muted", "The agent's notes wait here until you confirm, edit or discard them. Facts from git, Slurm and W&B need no review."),
+      el("p", "muted", "The agent's notes wait here until you confirm, edit or discard them. Facts from git, Slurm and W&B need no review. Your choice is saved in the job's record on the cluster."),
     );
     section.append(top);
     if (model.reviewCards.length === 0) {
@@ -350,7 +435,7 @@
       heading.append(el("strong", "mono", card.name), " ", el("span", "muted", card.stateLabel));
       article.append(
         heading,
-        el("div", "muted small", `Job ${card.id} on ${card.cluster} · project ${card.project} · submitted ${card.submittedText}`),
+        el("div", "muted small", [`Job ${card.id} on ${card.cluster}`, `project ${card.project}`, card.submittedText && `submitted ${card.submittedText}`].filter(Boolean).join(" · ")),
         el("div", "note-status", "Unreviewed · agent draft"),
         el("p", "note-text", card.note),
       );
@@ -358,12 +443,12 @@
         const refs = el("ul", "references");
         for (const reference of card.references) {
           const item = el("li", "");
-          item.append(el("span", "check", "✓"), " ", el("span", "mono", reference), el("span", "muted", " checked by ctun at submit"));
+          item.append(el("span", "check", "✓"), " ", el("span", "mono", reference), el("span", "muted", " checked by ctun"));
           refs.append(item);
         }
         article.append(refs);
       }
-      const actions = reviewButtons(card.reviewKey);
+      const actions = reviewButtons(card.rowKey);
       actions.append(button("link-button", "Show job", { type: "showJob", key: card.rowKey }));
       article.append(actions);
       section.append(article);
@@ -375,6 +460,7 @@
     const message = event.data;
     if (message.type !== "model") return;
     const model = message.model;
+    shownRows = model.groups.flatMap((band) => band.rows);
     const focusedKey = /** @type {HTMLElement | null} */ (document.activeElement)?.dataset?.key;
     app.replaceChildren(header(model, message.refreshing), filters(model));
     if (message.error) app.append(el("p", "notice error", `ctun failed: ${message.error}`));

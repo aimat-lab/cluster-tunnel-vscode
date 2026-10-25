@@ -10,7 +10,30 @@ afterEach(() => {
 
 test("passes the arguments to ctun and parses its JSON", async () => {
   const report = await fakeCtun("echo-args").jobs("24h");
-  assert.deepStrictEqual(report, ["jobs", "--json", "--since", "24h"]);
+  assert.deepStrictEqual(report, ["jobs", "list", "--json", "--since", "24h"]);
+});
+
+test("passes a job edit as one option per field, so a value may start with a dash", async () => {
+  const ctun = fakeCtun("echo-args");
+  const moved = await ctun.editJobs("haicore", ["51319", "51322"], { project: "" });
+  assert.deepStrictEqual(moved, ["-t", "haicore", "jobs", "edit", "51319", "51322", "--project="]);
+  const noted = await ctun.editJobs("haicore", ["51319"], { note: "-lr halved", confirmNote: true });
+  assert.deepStrictEqual(noted, ["-t", "haicore", "jobs", "edit", "51319", "--note=-lr halved", "--confirm-note"]);
+});
+
+test("lists the projects of all time", async () => {
+  assert.deepStrictEqual(await fakeCtun("echo-args").projects(), ["projects", "list", "--json"]);
+});
+
+test("renames a project after `--`, so a name may start with a dash", async () => {
+  assert.deepStrictEqual(await fakeCtun("echo-args").renameProject("-old", "new", 3), [
+    "projects",
+    "rename",
+    "--json",
+    "--",
+    "-old",
+    "new",
+  ]);
 });
 
 test("sends input on stdin, not in argv", async () => {

@@ -79,9 +79,9 @@ straight to ctun's stdin.
   stored in the job's record, so every machine and agent sees it: Confirm runs
   `ctun jobs edit <id> --confirm-note`, Edit `--note <text> --confirm-note`, and
   Discard `--note ""`. A note changed later is unconfirmed again, and the record's
-  edit log keeps the old text. The activity bar badge and the status bar show how
-  many wait.
-- **Status bar**: connected clusters, notes to review, and budget use.
+  edit log keeps the old text. The "To review" button and the status bar's
+  tooltip show how many wait.
+- **Status bar**: connected clusters and budget use.
 
 ## Add-ons
 

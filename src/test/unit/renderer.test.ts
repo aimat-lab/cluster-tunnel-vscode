@@ -58,7 +58,8 @@ test("renders project groups, notes and the locked cluster", () => {
   const text = app.textContent ?? "";
   assert.match(text, /htfm3/);
   assert.match(text, /Unassigned4no project in the job record/);
-  assert.match(text, /unreviewed Rerun of job:91/);
+  assert.match(text, /Rerun of job:91/);
+  assert.doesNotMatch(text, /unreviewed/i);
   assert.match(text, /bwuni3 has no tunnel/);
   assert.match(text, /To review · 3/);
 });

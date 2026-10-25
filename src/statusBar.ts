@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { ClusterData } from "./clusterData";
 
-/** The status-bar entry: connected clusters, their budget use, and notes waiting for review. */
+/** The status-bar entry: connected clusters and their budget use; its tooltip names the notes waiting for review. */
 export function createStatusBar(data: ClusterData, pendingReviews: () => number): vscode.Disposable {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
   const update = () => {
@@ -12,10 +12,9 @@ export function createStatusBar(data: ClusterData, pendingReviews: () => number)
         : [],
     );
     const pending = pendingReviews();
-    const reviewText = pending > 0 ? [`$(comment-unresolved) ${pending} to review`] : [];
-    item.text = [`$(server) ctun · ${live.length} of ${data.statuses.length} connected`, ...reviewText, ...budgets].join("   ");
-    item.command = pending > 0 ? "ctun.showReviews" : "ctun.clusters.focus";
-    item.tooltip = pending > 0 ? "Review the agent's notes" : "Show the ctun clusters";
+    item.text = [`$(server) ctun · ${live.length} of ${data.statuses.length} connected`, ...budgets].join("   ");
+    item.command = "ctun.clusters.focus";
+    item.tooltip = pending > 0 ? `Show the ctun clusters · ${pending} agent notes to review` : "Show the ctun clusters";
     item.show();
   };
   return vscode.Disposable.from(item, data.onDidChange(update));

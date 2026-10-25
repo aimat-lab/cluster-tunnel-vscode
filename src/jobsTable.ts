@@ -25,7 +25,7 @@ export const SINCE_OPTIONS = [
 /** The table's columns; each sorts its jobs by what it shows. */
 export const COLUMNS = [
   { id: "id", label: "Cluster · ID" },
-  { id: "name", label: "Job · why it runs" },
+  { id: "name", label: "Job · note" },
   { id: "state", label: "State" },
   { id: "start", label: "Start" },
   { id: "elapsed", label: "Elapsed / limit" },

@@ -214,7 +214,6 @@
     nameCell.append(name);
     if (row.note) {
       const note = el("div", "note-preview");
-      if (row.note.status === "unreviewed") note.append(el("span", "tag", "unreviewed"), " ");
       note.append(row.note.preview);
       nameCell.append(note);
     }

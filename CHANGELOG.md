@@ -32,7 +32,8 @@ All notable changes to the ctun VS Code extension. The format follows
 - Add-ons: an internal interface through which a library adds lines in a
   job's details and a Setup row; each add-on is off by default.
 - Agent notes: the note under each job name, Confirm / Edit / Discard, a "To
-  review" mode with cards, the activity-bar badge and the status-bar count. A
+  review" mode with cards, and their count on its button and in the status
+  bar's tooltip; the job rows don't mark them. A
   review is stored in the job's record through `ctun jobs edit`
   (`--confirm-note`, `--note`), so every machine and agent sees it.
 - Editing jobs: Ctrl/Shift-click selects rows, and the selection drags onto a

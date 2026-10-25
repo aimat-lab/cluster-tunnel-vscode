@@ -60,7 +60,7 @@ button:disabled { cursor: default; opacity: 0.6; }
 
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .chip, .review-button { height: 28px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); }
-.review-button.pending { border-color: var(--warning); color: var(--vscode-foreground); }
+.review-button.pending { color: var(--vscode-foreground); }
 
 .primary {
   height: 28px;
@@ -92,17 +92,6 @@ td { padding: 10px 16px; border-top: 1px solid var(--border); vertical-align: to
 .name-cell { max-width: 420px; }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-preview { margin-top: 3px; color: var(--muted); font-size: 12px; }
-.tag {
-  display: inline-block;
-  padding: 0 6px;
-  border: 1px solid var(--warning);
-  border-radius: 3px;
-  color: var(--warning);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
 .group-row td {
   padding: 6px 16px 6px calc(10px + var(--depth, 0) * 20px);
   background: color-mix(in srgb, var(--accent) 4%, var(--vscode-editor-background));
@@ -185,7 +174,6 @@ dl.details { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 10p
 dl.details dt { color: var(--muted); font-size: 12px; padding-top: 2px; }
 dl.details dd { margin: 0; }
 .note-box { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--vscode-editor-background); }
-.note-box.status-unreviewed { border-color: var(--warning); }
 .note-status { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .note-text { margin: 6px 0 8px; white-space: pre-wrap; }
 .review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -205,7 +193,7 @@ dl.details dd { margin: 0; }
 .review { display: flex; flex-direction: column; gap: 12px; }
 .review-top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .review-top p { margin: 0; }
-.review-card { padding: 14px 16px; border: 1px solid var(--warning); border-radius: 8px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; }
+.review-card { padding: 14px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; }
 .references { margin: 0 0 8px; padding: 0; list-style: none; font-size: 12px; }
 .check { color: var(--running); }
 .empty-text { color: var(--muted); }

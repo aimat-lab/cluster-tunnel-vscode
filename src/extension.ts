@@ -50,14 +50,8 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   const setup = new SetupView(data, addOns, createCtun);
   const setupView = vscode.window.createTreeView(SETUP_VIEW_ID, { treeDataProvider: setup });
-  const updateBadge = () => {
-    const pending = pendingCount();
-    clustersView.badge = pending > 0 ? { value: pending, tooltip: `${pending} agent notes to review` } : undefined;
-  };
-
   data.onDidChange(() => {
     clustersView.message = data.error ? `ctun failed: ${data.error.message}` : undefined;
-    updateBadge();
   });
   clustersView.onDidChangeVisibility(({ visible }) => {
     if (visible) {

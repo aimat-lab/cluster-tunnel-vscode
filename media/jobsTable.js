@@ -381,19 +381,20 @@
   /**
    * Switches the table with `change` and lets each project band glide from where it was to
    * where it now is (FLIP): only the bands move, on the compositor, so a long table stays smooth.
-   * A band that was not there fades in; one far off screen starts just past its edge.
+   * A band that was not there fades in; one far off screen starts just past its edge. With
+   * reduced motion every band only fades in: a fade is no movement.
    */
   function glide(fromSelector, toSelector, change) {
     const before = new Map([...app.querySelectorAll(fromSelector)].map((band) => [band.dataset.project, band.getBoundingClientRect().top]));
     change();
-    if (prefersReducedMotion()) return;
+    const reduced = prefersReducedMotion();
     const limit = window.innerHeight;
     for (const band of app.querySelectorAll(toSelector)) {
       if (typeof band.animate !== "function") return;
       const top = band.getBoundingClientRect().top;
       const old = before.get(band.dataset.project);
       const timing = { duration: FOLD_MS, easing: FOLD_EASING };
-      if (old === undefined) {
+      if (reduced || old === undefined) {
         band.animate([{ opacity: 0 }, { opacity: 1 }], timing);
       } else {
         const offset = Math.max(-limit, Math.min(limit, old - top));

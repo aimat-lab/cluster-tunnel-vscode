@@ -4,6 +4,7 @@ import { SetupInputs, setupChecks } from "../../setupChecks";
 
 const WORKING: SetupInputs = {
   ctunPath: "ctun",
+  ctunVersion: "0.9.0",
   refreshed: true,
   ctunError: undefined,
   clusterCount: 2,
@@ -22,7 +23,7 @@ function summary(inputs: SetupInputs): string[] {
 
 test("a working setup is all ok", () => {
   assert.deepStrictEqual(summary(WORKING), [
-    "ctun: ok ctun",
+    "ctun: ok 0.9.0",
     "Clusters: ok 2 configured",
     "Login: plain VS Code input boxes",
     "Claude skill: ok installed",
@@ -33,6 +34,14 @@ test("a working setup is all ok", () => {
 test("a missing ctun is broken and its clusters wait for it", () => {
   const rows = summary({ ...WORKING, ctunError: { kind: "not_found", message: "ctun not found; set ctun.path" } });
   assert.deepStrictEqual(rows.slice(0, 2), ["ctun: broken not found at ctun", "Clusters: checking needs a working ctun"]);
+});
+
+test("a ctun older than the minimum is broken, even while it fails", () => {
+  const failing = { kind: "failed" as const, message: "No such command 'list'." };
+  assert.strictEqual(summary({ ...WORKING, ctunVersion: "0.6.0", ctunError: failing })[0], "ctun: broken 0.6.0, needs 0.9.0 or newer");
+  assert.strictEqual(summary({ ...WORKING, ctunVersion: "0.10.0" })[0], "ctun: ok 0.10.0");
+  assert.strictEqual(summary({ ...WORKING, ctunVersion: "0.9.0.dev1" })[0], "ctun: ok 0.9.0.dev1");
+  assert.strictEqual(summary({ ...WORKING, ctunVersion: undefined })[0], "ctun: ok ctun");
 });
 
 test("an empty ctun config is broken", () => {

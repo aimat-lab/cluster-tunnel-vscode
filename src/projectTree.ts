@@ -94,6 +94,33 @@ export function hiddenAfterShowing(project: string, hidden: ReadonlySet<string>,
   return result;
 }
 
+/** `projects` without `project` and every project nested in it. */
+export function withoutNested(projects: Iterable<string>, project: string): Set<string> {
+  return new Set([...projects].filter((other) => !selfAndAncestors(other).includes(project)));
+}
+
+/** `project` once `old` is renamed to `renamed`, with the projects nested in `old`; undefined if it is neither. */
+export function renamedProject(project: string, old: string, renamed: string): string | undefined {
+  return selfAndAncestors(project).includes(old) ? normalizeProject(renamed + project.slice(old.length)) : undefined;
+}
+
+/** `projects` with `old` and every project nested in it renamed to `renamed`. */
+export function withRenamed(projects: Iterable<string>, old: string, renamed: string): Set<string> {
+  return new Set([...projects].map((project) => renamedProject(project, old, renamed) ?? project));
+}
+
+/**
+ * The new name of `dragged` dropped on `target` (undefined: the top level), keeping its own name;
+ * undefined when it stays where it is or would land inside itself.
+ */
+export function droppedProject(dragged: string, target: string | undefined): string | undefined {
+  if (target !== undefined && selfAndAncestors(target).includes(dragged)) {
+    return undefined;
+  }
+  const dropped = target === undefined ? leafName(dragged) : `${target}${PROJECT_SEPARATOR}${leafName(dragged)}`;
+  return dropped === dragged ? undefined : dropped;
+}
+
 /** True when `project` or a project above it is in `hidden`. */
 export function isHiddenBy(project: string, hidden: ReadonlySet<string>): boolean {
   return selfAndAncestors(project).some((level) => hidden.has(level));

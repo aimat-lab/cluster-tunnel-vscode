@@ -1,16 +1,20 @@
 import * as assert from "assert";
 import { test } from "node:test";
 import {
+  droppedProject,
   hiddenAfterShowing,
   hiddenToShowOnly,
   isHiddenBy,
+  withoutNested,
   leafName,
   nestingDepth,
   normalizeProject,
   parentProject,
+  renamedProject,
   selfAndAncestors,
   totalsWithNested,
   treeOrder,
+  withRenamed,
 } from "../../projectTree";
 
 test("a `/` in a project name nests it", () => {
@@ -53,4 +57,25 @@ test("showing a project below a hidden one keeps the rest of that project hidden
     "legacy",
   ]);
   assert.deepStrictEqual([...hiddenAfterShowing("legacy", new Set(["htfm", "legacy"]), known)], ["htfm"]);
+});
+
+test("removing a project removes the projects nested in it, not its siblings", () => {
+  const drafts = ["htfm", "htfm/mh", "htfm/mh/lr", "htfmx", "sweeps"];
+  assert.deepStrictEqual([...withoutNested(drafts, "htfm/mh")], ["htfm", "htfmx", "sweeps"]);
+});
+
+test("renaming a project renames the projects nested in it, not its siblings", () => {
+  assert.strictEqual(renamedProject("htfm/mh", "htfm", "archive/htfm"), "archive/htfm/mh");
+  assert.strictEqual(renamedProject("htfm", "htfm", "archive/htfm"), "archive/htfm");
+  assert.strictEqual(renamedProject("htfmx", "htfm", "archive/htfm"), undefined);
+  assert.deepStrictEqual([...withRenamed(["htfm", "htfm/mh", "sweeps"], "htfm", "eval")], ["eval", "eval/mh", "sweeps"]);
+});
+
+test("a dropped project keeps its own name below the target", () => {
+  assert.strictEqual(droppedProject("htfm/mh", "eval"), "eval/mh");
+  assert.strictEqual(droppedProject("htfm/mh", undefined), "mh");
+  assert.strictEqual(droppedProject("htfm/mh", "htfm"), undefined); // already there
+  assert.strictEqual(droppedProject("htfm", "htfm/mh"), undefined); // into itself
+  assert.strictEqual(droppedProject("htfm", "htfm"), undefined);
+  assert.strictEqual(droppedProject("htfm", "htfmx"), "htfmx/htfm");
 });

@@ -1,5 +1,5 @@
 import type { DetailLine } from "./addOns";
-import type { ClusterJobsEntry, ClusterStatus, Job, JobRecord, JobsReport } from "./ctun";
+import type { ClusterJobsEntry, ClusterStatus, Job, JobRecord, JobsReport, ProjectsReport, RecordChange } from "./ctun";
 import { baseState, STATE_GROUPS, StateGroupId, stateGroup } from "./jobStates";
 import {
   isHiddenBy,
@@ -11,7 +11,6 @@ import {
   totalsWithNested,
   treeOrder,
 } from "./projectTree";
-import { Review, reviewKey } from "./reviews";
 
 export const SINCE_OPTIONS = [
   { value: "24h", label: "Last 24 hours" },
@@ -37,7 +36,7 @@ export type JobsSort = { column: ColumnId; direction: SortDirection };
 export const DEFAULT_SORT: JobsSort = { column: "start", direction: "descending" };
 
 export const ALL_CLUSTERS = "all";
-/** The project of a job submitted without `--project`, or without a record. */
+/** The project of a job whose record has none, or of a job without a record. */
 export const UNASSIGNED = "unassigned";
 const FINISHED_GROUPS: readonly StateGroupId[] = ["completed", "failed", "cancelled"];
 const SHORT_COMMIT_LENGTH = 7;
@@ -79,10 +78,11 @@ export interface TableInputs {
   loggingIn: ReadonlySet<string>;
   filters: JobsFilters;
   updatedAt: Date | undefined;
-  reviews: Readonly<Record<string, Review>>;
   mode: "jobs" | "review";
   /** Row keys (`<cluster>/<job id>`) whose details are open. */
   expanded: ReadonlySet<string>;
+  /** Row keys picked with Ctrl- or Shift-click, for Move to Project. */
+  selected: ReadonlySet<string>;
   extras: ReadonlyMap<string, RowExtras>;
   /** Projects whose band is folded: their jobs and nested projects are hidden. */
   collapsedProjects: ReadonlySet<string>;
@@ -108,6 +108,8 @@ export interface JobsTableModel {
   updatedText: string;
   pendingCount: number;
   reviewCards: ReviewCard[];
+  /** Selected rows that are shown; only these are moved. */
+  selectedCount: number;
 }
 
 export interface ProjectBand {
@@ -123,12 +125,10 @@ export interface ProjectBand {
   rows: JobRow[];
 }
 
-export type NoteStatus = "unreviewed" | Review["status"];
+export type NoteStatus = "unreviewed" | "confirmed";
 
 export interface NoteView {
-  reviewKey: string;
   status: NoteStatus;
-  /** The edited text for an edited note, else the agent's. */
   text: string;
   preview: string;
   statusLabel: string;
@@ -152,11 +152,14 @@ export interface JobRow {
   partitionNodes: string;
   note: NoteView | undefined;
   expanded: boolean;
+  selected: boolean;
   details: JobDetails | undefined;
 }
 
 export interface JobDetails {
   hasRecord: boolean;
+  /** False for a record `ctun jobs edit` created: it has a project or note, but no submit-time facts. */
+  hasFacts: boolean;
   code: { commit: string; branch: string; pushed: boolean | null; uncommitted: number | null; workdir: string } | undefined;
   from: string | undefined;
   previous: { id: string; cluster: string; stateLabel: string; sameCommit: boolean } | undefined;
@@ -164,19 +167,21 @@ export interface JobDetails {
   changesRequest: { cluster: string; workdir: string; fromCommit: string; toCommit: string } | undefined;
   changes: ChangesState | undefined;
   addOnLines: AddOnLinesState | undefined;
+  /** Each `ctun jobs edit` of the record, oldest first, e.g. `Oct 20, 04:36 PM · laptop: project htfm → htfm › mh`. */
+  edits: string[];
 }
 
 export interface ReviewCard {
   rowKey: string;
-  reviewKey: string;
   cluster: string;
   id: string;
   name: string;
   stateLabel: string;
   project: string;
-  submittedText: string;
+  /** Undefined for a record without facts. */
+  submittedText: string | undefined;
   note: string;
-  /** Every marked reference; ctun refused the submission if one was unknown. */
+  /** Every marked reference; ctun refused the note if one was unknown. */
   references: string[];
 }
 
@@ -206,25 +211,44 @@ export function projectCounts(report: JobsReport | undefined): Map<string, numbe
   return counts;
 }
 
-/** Notes no human has confirmed, edited or discarded yet, newest first. */
-export function pendingReviews(report: JobsReport | undefined, reviews: Readonly<Record<string, Review>>): ReviewCard[] {
+/**
+ * Jobs per project of all time, summed over the clusters, for the Projects view.
+ * Unassigned counts the jobs of the `since` window, since records without a
+ * project are not listed and jobs without a record have none.
+ */
+export function allTimeProjectCounts(projects: ProjectsReport | undefined, jobs: JobsReport | undefined): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const entry of projects?.clusters ?? []) {
+    for (const { project, jobs: jobCount } of entry.projects) {
+      const name = normalizeProject(project) || UNASSIGNED;
+      counts.set(name, (counts.get(name) ?? 0) + jobCount);
+    }
+  }
+  const unassigned = projectCounts(jobs).get(UNASSIGNED);
+  if (unassigned !== undefined) {
+    counts.set(UNASSIGNED, unassigned);
+  }
+  return counts;
+}
+
+/** Notes no human has confirmed yet, newest submission first. */
+export function pendingReviews(report: JobsReport | undefined): ReviewCard[] {
   const pending = (report?.clusters ?? []).flatMap((entry) => {
     const listed = entry.jobs.flatMap((job) => (job.record ? [{ record: job.record, job: job as Job | undefined }] : []));
     const unlisted = (entry.records_without_job ?? []).map((record) => ({ record, job: undefined }));
     return [...listed, ...unlisted]
-      .map(({ record, job }) => ({ entry, record, job, key: reviewKey(record, entry.cluster) }))
-      .filter(({ record, key }) => record.note && !reviews[key]);
+      .map(({ record, job }) => ({ entry, record, job }))
+      .filter(({ record }) => record.note && !record.note_confirmed);
   });
-  pending.sort((a, b) => (a.record.submitted_at < b.record.submitted_at ? 1 : -1));
-  return pending.map(({ entry, record, job, key }) => ({
+  pending.sort((a, b) => ((a.record.submitted_at ?? "") < (b.record.submitted_at ?? "") ? 1 : -1));
+  return pending.map(({ entry, record, job }) => ({
     rowKey: rowKey(entry.cluster, record.job_id),
-    reviewKey: key,
     cluster: entry.cluster,
     id: record.job_id,
     name: record.job_name ?? job?.name ?? "job",
     stateLabel: job ? stateLabel(job) : "Not listed",
     project: projectLabel(projectOf(record)),
-    submittedText: formatTime(record.submitted_at),
+    submittedText: record.submitted_at ? formatTime(record.submitted_at) : undefined,
     note: record.note ?? "",
     references: noteReferences(record.note ?? ""),
   }));
@@ -256,7 +280,8 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
     const messages = [entry.error, entry.records_error && `job records: ${entry.records_error}`];
     return messages.flatMap((message) => (message ? [{ cluster: entry.cluster, message }] : []));
   });
-  const reviewCards = pendingReviews(report, inputs.reviews);
+  const reviewCards = pendingReviews(report);
+  const groups = projectBands(rows, filtered, inputs.collapsedProjects);
 
   return {
     mode: inputs.mode,
@@ -277,18 +302,30 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
       label: id === ALL_CLUSTERS ? "All clusters" : id,
       pressed: filters.cluster === id,
     })),
-    groups: projectBands(rows, filtered, inputs.collapsedProjects),
+    groups,
     lockedClusters,
     errors: clusterErrors,
     showEmpty: rows.length === 0 && lockedClusters.length === 0,
     updatedText: inputs.updatedAt ? `Updated ${inputs.updatedAt.toLocaleTimeString()}` : "Loading…",
     pendingCount: reviewCards.length,
     reviewCards,
+    selectedCount: groups.flatMap((band) => band.rows).filter((row) => row.selected).length,
   };
 }
 
 export function rowKey(cluster: string, jobId: string): string {
   return `${cluster}/${jobId}`;
+}
+
+/** The row keys in a drag from the "Cluster jobs" tab; undefined for any other text, e.g. from an editor. */
+export function jobKeysIn(text: string): string[] | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    const isJobKeys = Array.isArray(parsed) && parsed.length > 0 && parsed.every((key) => typeof key === "string" && key.includes("/"));
+    return isJobKeys ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The full path, e.g. `htfm › multihead`. */
@@ -374,7 +411,7 @@ function projectBands(rows: JobRow[], filtered: LiveJob[], collapsedProjects: Re
         label: bandLabel(project),
         depth: nestingDepth(project),
         count: shownCounts.get(project) ?? 0,
-        note: project === UNASSIGNED ? "submitted without --project" : undefined,
+        note: project === UNASSIGNED ? "no project in the job record" : undefined,
         collapsed,
         rows: collapsed ? [] : rowsByProject.get(project) ?? [],
       };
@@ -401,28 +438,24 @@ function toRow(cluster: string, job: Job, inputs: TableInputs, records: ClusterR
     startText: startText(job, group),
     active: group === "running" || group === "queued",
     partitionNodes: `${job.partition} · ${job.nodes}`,
-    note: job.record ? noteView(job.record, cluster, inputs.reviews) : undefined,
+    note: job.record ? noteView(job.record) : undefined,
     expanded,
+    selected: inputs.selected.has(key),
     details: expanded ? details(cluster, job, inputs.extras.get(key), records, allJobs) : undefined,
   };
 }
 
-function noteView(record: JobRecord, cluster: string, reviews: Readonly<Record<string, Review>>): NoteView | undefined {
-  if (!record.note) {
+function noteView(record: JobRecord): NoteView | undefined {
+  const text = record.note;
+  if (!text) {
     return undefined;
   }
-  const key = reviewKey(record, cluster);
-  const review = reviews[key];
-  const text = review?.status === "edited" && review.text !== undefined ? review.text : record.note;
-  const status: NoteStatus = review?.status ?? "unreviewed";
+  const status: NoteStatus = record.note_confirmed ? "confirmed" : "unreviewed";
   const statusLabels: Record<NoteStatus, string> = {
-    unreviewed: "Unreviewed agent draft",
+    unreviewed: "Unreviewed draft",
     confirmed: "Confirmed by you",
-    edited: "Edited by you",
-    discarded: "Discarded by you",
   };
   return {
-    reviewKey: key,
     status,
     text,
     preview: text.length > NOTE_PREVIEW_LENGTH ? `${text.slice(0, NOTE_PREVIEW_LENGTH - 1)}…` : text,
@@ -447,6 +480,7 @@ function details(
   const fromCommit = previous?.record.code.commit;
   return {
     hasRecord: record !== undefined,
+    hasFacts: Boolean(record?.submitted_at),
     code: code?.commit
       ? {
           commit: code.commit.slice(0, SHORT_COMMIT_LENGTH),
@@ -456,7 +490,7 @@ function details(
           workdir: code.workdir ?? "",
         }
       : undefined,
-    from: record ? `${record.submitted_from} · ${formatTime(record.submitted_at)}` : undefined,
+    from: record?.submitted_at ? `${record.submitted_from ?? "unknown machine"} · ${formatTime(record.submitted_at)}` : undefined,
     previous: previous
       ? {
           id: previous.record.job_id,
@@ -471,21 +505,43 @@ function details(
         : undefined,
     changes: extras?.changes,
     addOnLines: extras?.addOnLines,
+    edits: (record?.changes ?? []).map(editText),
   };
 }
 
-/** D10: the latest earlier record with the same project and job name. */
+/** One change of the record in a line: when, from where, and what. */
+function editText(change: RecordChange): string {
+  const parts = [];
+  if (change.project) {
+    const [before, after] = change.project.map((project) => projectLabel(normalizeProject(project ?? "") || UNASSIGNED));
+    parts.push(`project ${before} → ${after}`);
+  }
+  if (change.note) {
+    const [before, after] = change.note;
+    parts.push(!before ? "note added" : !after ? "note removed" : "note changed");
+  }
+  if (change.note_confirmed?.[1]) {
+    parts.push("note confirmed");
+  }
+  return `${formatTime(change.at)} · ${change.from}: ${parts.join(", ")}`;
+}
+
+/** D10: the latest earlier record with the same project and job name; a record without facts has no time to compare. */
 export function previousRun(record: ClusterRecord, records: readonly ClusterRecord[]): ClusterRecord | undefined {
+  const submittedAt = record.record.submitted_at;
+  if (!submittedAt) {
+    return undefined;
+  }
   const project = projectOf(record.record);
-  return records
-    .filter(
-      (other) =>
-        other.record.job_id !== record.record.job_id &&
-        projectOf(other.record) === project &&
-        other.record.job_name === record.record.job_name &&
-        other.record.submitted_at < record.record.submitted_at,
-    )
-    .sort((a, b) => (a.record.submitted_at < b.record.submitted_at ? 1 : -1))[0];
+  const earlier = records.filter(
+    (other) =>
+      other.record.job_id !== record.record.job_id &&
+      projectOf(other.record) === project &&
+      other.record.job_name === record.record.job_name &&
+      other.record.submitted_at !== null &&
+      other.record.submitted_at < submittedAt,
+  );
+  return earlier.sort((a, b) => ((a.record.submitted_at ?? "") < (b.record.submitted_at ?? "") ? 1 : -1))[0];
 }
 
 /** `PENDING` → `Queued`; any other state in sentence case: `OUT_OF_MEMORY` → `Out of memory`. */

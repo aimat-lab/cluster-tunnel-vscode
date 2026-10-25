@@ -7,12 +7,14 @@ import { loadChanges } from "./codeChanges";
 import { CommandsPanel, CommandsPanelServices } from "./commandsPanel";
 import { Ctun } from "./ctun";
 import { JobsPanel, JobsPanelServices } from "./jobsPanel";
-import { pendingReviews } from "./jobsTable";
+import { pendingReviews, projectLabel } from "./jobsTable";
+import { normalizeProject, PROJECT_SEPARATOR } from "./projectTree";
 import { LoginMethod, logIn, logOut } from "./login";
 import { BRIDGE_VARIABLE, LoginAnswer, startLoginBridge } from "./loginBridge";
+import { DRAFT_PROJECTS_STATE_KEY, DraftProjects } from "./draftProjects";
 import { HIDDEN_PROJECTS_STATE_KEY, HiddenProjects } from "./hiddenProjects";
-import { ProjectsView } from "./projectsView";
-import { REVIEWS_STATE_KEY, ReviewStore } from "./reviews";
+import { askRenamedProject, ProjectRenameServices, renameProject } from "./projectRename";
+import { DRAFT_PROJECT_INFO, ProjectsView } from "./projectsView";
 import { SETUP_VIEW_ID, SetupView } from "./setupView";
 import { offerSkillInstall } from "./skillCommand";
 import { createStatusBar } from "./statusBar";
@@ -20,17 +22,33 @@ import { createStatusBar } from "./statusBar";
 export function activate(context: vscode.ExtensionContext): void {
   const data = new ClusterData(createCtun);
   const addOns = new AddOnRegistry();
-  const reviews = new ReviewStore(context.globalState);
   const hiddenProjects = new HiddenProjects(context.globalState);
-  // D8: reviews live in globalState, which Settings Sync carries to the user's other machines; so do hidden projects.
-  context.globalState.setKeysForSync([REVIEWS_STATE_KEY, HIDDEN_PROJECTS_STATE_KEY]);
-  const reviewsChanged = new vscode.EventEmitter<void>();
-  const pendingCount = () => pendingReviews(data.jobs, reviews.all()).length;
+  const draftProjects = new DraftProjects(context.globalState);
+  // Hidden and draft projects live in globalState, which Settings Sync carries to the user's other machines.
+  context.globalState.setKeysForSync([HIDDEN_PROJECTS_STATE_KEY, DRAFT_PROJECTS_STATE_KEY]);
+  const pendingCount = () => pendingReviews(data.jobs).length;
 
   const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
-  const projectTree = new ProjectsView(data, hiddenProjects);
-  const projectsView = vscode.window.createTreeView("ctun.projects", { treeDataProvider: projectTree });
-  const setup = new SetupView(data, addOns);
+  const renameServices: ProjectRenameServices = {
+    data,
+    draftProjects,
+    hiddenProjects,
+    ctun: createCtun,
+    knownProjects: () => projectTree.knownProjects(),
+    jobCount: (project) => projectTree.jobCount(project),
+  };
+  const projectTree = new ProjectsView(
+    data,
+    hiddenProjects,
+    draftProjects,
+    async (keys, project) => JobsPanel.open?.moveJobs(keys, project),
+    (project, renamed) => renameProject(renameServices, project, renamed),
+  );
+  const projectsView = vscode.window.createTreeView("ctun.projects", {
+    treeDataProvider: projectTree,
+    dragAndDropController: projectTree,
+  });
+  const setup = new SetupView(data, addOns, createCtun);
   const setupView = vscode.window.createTreeView(SETUP_VIEW_ID, { treeDataProvider: setup });
   const updateBadge = () => {
     const pending = pendingCount();
@@ -40,10 +58,6 @@ export function activate(context: vscode.ExtensionContext): void {
   data.onDidChange(() => {
     clustersView.message = data.error ? `ctun failed: ${data.error.message}` : undefined;
     updateBadge();
-  });
-  reviewsChanged.event(() => {
-    updateBadge();
-    JobsPanel.refreshView();
   });
   clustersView.onDidChangeVisibility(({ visible }) => {
     if (visible) {
@@ -55,8 +69,8 @@ export function activate(context: vscode.ExtensionContext): void {
     data,
     hiddenProjects,
     addOns,
-    reviews,
-    onReviewsChanged: () => reviewsChanged.fire(),
+    ctun: createCtun,
+    knownProjects: () => projectTree.knownProjects(),
     loadChanges: (cluster, workdir, fromCommit, toCommit) => loadChanges(createCtun(), cluster, workdir, fromCommit, toCommit),
   };
   const showJobs = () => JobsPanel.show(context.extensionUri, services);
@@ -76,22 +90,42 @@ export function activate(context: vscode.ExtensionContext): void {
     data,
     addOns,
     hiddenProjects,
+    draftProjects,
     clustersView,
     projectsView,
     setupView,
-    reviewsChanged,
-    createStatusBar(data, pendingCount, reviewsChanged.event),
-    vscode.commands.registerCommand("ctun.refresh", () => data.refresh()),
+    createStatusBar(data, pendingCount),
+    vscode.commands.registerCommand("ctun.refresh", () => data.refreshWithProjects()),
     vscode.commands.registerCommand("ctun.openConfig", () => openConfig(createCtun())),
     vscode.commands.registerCommand("ctun.installSkill", () => offerSkillInstall(createCtun(), () => setup.refresh())),
     vscode.commands.registerCommand("ctun.showJobs", showJobs),
     vscode.commands.registerCommand("ctun.showCommands", showCommands),
     vscode.commands.registerCommand("ctun.showReviews", () => showJobs().showReviews()),
+    vscode.commands.registerCommand("ctun.moveToProject", (row: JobRowContext) => JobsPanel.open?.moveToProject(row.jobKey)),
+    vscode.commands.registerCommand("ctun.editNote", (row: JobRowContext) => JobsPanel.open?.editNote(row.jobKey)),
     vscode.commands.registerCommand("ctun.hideProject", (project: string) => hiddenProjects.hide(project)),
     vscode.commands.registerCommand("ctun.showProject", (project: string) =>
       hiddenProjects.show(project, projectTree.knownProjects()),
     ),
     vscode.commands.registerCommand("ctun.showAllProjects", () => hiddenProjects.showAll()),
+    vscode.commands.registerCommand("ctun.newProject", async () => {
+      const parent = projectTree.parentForNewProject(projectsView.selection[0]);
+      const project = await askNewProject(parent, projectTree.knownProjects());
+      if (project !== undefined) {
+        await draftProjects.add(project);
+        await projectsView.reveal(project, { select: true, expand: true });
+      }
+    }),
+    vscode.commands.registerCommand("ctun.renameProject", async (project: string) => {
+      const renamed = await askRenamedProject(project);
+      if (renamed !== undefined) {
+        await renameProject(renameServices, project, renamed);
+      }
+    }),
+    vscode.commands.registerCommand("ctun.deleteDraftProject", (project: string) => draftProjects.remove(project)),
+    vscode.commands.registerCommand("ctun.aboutDraftProjects", () =>
+      vscode.window.showInformationMessage("A draft project has no jobs yet", { modal: true, detail: DRAFT_PROJECT_INFO }),
+    ),
     vscode.commands.registerCommand("ctun.showOnlyProject", async (project: string) => {
       await hiddenProjects.showOnly(project, projectTree.knownProjects());
       showJobs();
@@ -136,6 +170,27 @@ async function announceLoginBridge(context: vscode.ExtensionContext, answer: Log
 }
 
 export function deactivate(): void {}
+
+/** Asks for the new project's name below `parent`; returns its full path, or undefined when cancelled. */
+async function askNewProject(parent: string | undefined, known: readonly string[]): Promise<string | undefined> {
+  const fullPath = (name: string) => normalizeProject(parent === undefined ? name : `${parent}${PROJECT_SEPARATOR}${name}`);
+  const name = await vscode.window.showInputBox({
+    title: parent === undefined ? "New project" : `New project in ${projectLabel(parent)}`,
+    prompt: "A / nests it further, e.g. sweeps/lr.",
+    validateInput: (value) => {
+      if (!normalizeProject(value)) {
+        return "Give the project a name.";
+      }
+      return known.includes(fullPath(value)) ? `${projectLabel(fullPath(value))} already exists.` : undefined;
+    },
+  });
+  return name === undefined ? undefined : fullPath(name);
+}
+
+/** What a right-click on a job row passes to the commands of its context menu (`data-vscode-context` in the webview). */
+interface JobRowContext {
+  jobKey: string;
+}
 
 /** `configPath` makes every call use that config file instead of ctun's default. */
 function createCtun(configPath?: string): Ctun {

@@ -161,6 +161,20 @@ td { padding: 10px 16px; border-top: 1px solid var(--border); vertical-align: to
 .sort-arrow { min-width: 8px; }
 .elapsed { white-space: nowrap; }
 .job.expanded td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.job.selected td { background: var(--vscode-list-inactiveSelectionBackground, color-mix(in srgb, var(--accent) 18%, transparent)); }
+.job.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.job.selected { cursor: grab; }
+.group-row.drop-target td { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.drag-image { position: fixed; top: -1000px; left: 0; display: flex; flex-direction: column; gap: 3px; }
+.drag-card {
+  padding: 5px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--vscode-editor-background);
+  box-shadow: 2px 2px 6px rgb(0 0 0 / 25%);
+  white-space: nowrap;
+}
+.drag-more { padding-left: 10px; color: var(--muted); font-size: 11px; }
 .details-row td { border-top: 0; padding: 4px 16px 16px 16px; background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .empty td { padding: 28px 16px; text-align: center; color: var(--muted); }
 .notice td { background: var(--surface); }
@@ -177,6 +191,16 @@ dl.details dd { margin: 0; }
 .review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .commits summary { cursor: pointer; color: var(--vscode-textLink-foreground); }
 .commit-list { margin: 6px 0 0; padding-left: 20px; }
+.edits { margin: 0; padding: 0; list-style: none; color: var(--muted); }
+.selection-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 10%, var(--vscode-editor-background));
+}
 
 .review { display: flex; flex-direction: column; gap: 12px; }
 .review-top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }

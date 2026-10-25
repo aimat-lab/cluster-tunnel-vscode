@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { hiddenAfterShowing, hiddenToShowOnly, selfAndAncestors } from "./projectTree";
+import { hiddenAfterShowing, hiddenToShowOnly, selfAndAncestors, withRenamed } from "./projectTree";
 
 /** Where hidden projects are kept: the extension's `globalState`, which Settings Sync carries. */
 export const HIDDEN_PROJECTS_STATE_KEY = "ctun.hiddenProjects";
@@ -37,6 +37,11 @@ export class HiddenProjects implements vscode.Disposable {
 
   showAll(): Promise<void> {
     return this.store(new Set());
+  }
+
+  /** Keeps `project` and the projects nested in it hidden under their new names. */
+  rename(project: string, renamed: string): Promise<void> {
+    return this.store(withRenamed(this.all(), project, renamed));
   }
 
   dispose(): void {

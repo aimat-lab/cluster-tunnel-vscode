@@ -13,7 +13,7 @@ export interface ClusterStatus {
   used_error: string | null;
 }
 
-/** The write-once record ctun keeps on the cluster for a job it submitted. */
+/** The record ctun keeps on the cluster for a job; `ctun jobs edit` changes its project and note, never its facts. */
 export interface JobRecord {
   schema_version: number;
   slurm_cluster: string | null;
@@ -21,10 +21,12 @@ export interface JobRecord {
   job_name: string | null;
   project: string | null;
   note: string | null;
-  /** ISO 8601, UTC. */
-  submitted_at: string;
-  submitted_from: string;
-  /** Each fact is null when ctun could not read it. */
+  /** True once a human confirmed the current note; absent from older ctun. */
+  note_confirmed?: boolean;
+  /** ISO 8601, UTC; null in a record `ctun jobs edit` created, which has no facts. */
+  submitted_at: string | null;
+  submitted_from: string | null;
+  /** Each fact is null when ctun could not read it; empty in a record without facts. */
   code: {
     workdir?: string | null;
     commit?: string | null;
@@ -33,9 +35,30 @@ export interface JobRecord {
     uncommitted?: string[] | null;
   };
   command: string[];
+  /** One entry per `ctun jobs edit`, oldest first; absent from older ctun. */
+  changes?: RecordChange[];
 }
 
-/** One job of `ctun jobs --json`; every Slurm field is a string as Slurm prints it. */
+/** One `ctun jobs edit` of a record: when, from which machine, and each changed field as `[old, new]`. */
+export interface RecordChange {
+  at: string;
+  from: string;
+  project?: [string | null, string | null];
+  note?: [string | null, string | null];
+  note_confirmed?: [boolean | null, boolean];
+}
+
+/** What `ctun jobs edit` changes; an empty string clears the project or note. */
+export interface JobEdit {
+  project?: string;
+  note?: string;
+  confirmNote?: boolean;
+}
+
+/** The oldest ctun with `jobs list`, `jobs edit` and `projects`: the fork's next release, after upstream's 0.8.0. */
+export const MINIMUM_CTUN_VERSION = "0.9.0";
+
+/** One job of `ctun jobs list --json`; every Slurm field is a string as Slurm prints it. */
 export interface Job {
   source: "active" | "done";
   jobid: string;
@@ -51,7 +74,7 @@ export interface Job {
   record?: JobRecord | null;
 }
 
-/** One cluster's entry in `ctun jobs --json`. */
+/** One cluster's entry in `ctun jobs list --json`. */
 export interface ClusterJobsEntry {
   cluster: string;
   /** Slurm's ClusterName, which jobs see as `SLURM_CLUSTER_NAME`; absent from older ctun, null when unknown. */
@@ -64,10 +87,35 @@ export interface ClusterJobsEntry {
   records_error?: string | null;
 }
 
-/** The whole output of `ctun jobs --json`. */
+/** The whole output of `ctun jobs list --json`. */
 export interface JobsReport {
   since_minutes: number;
   clusters: ClusterJobsEntry[];
+}
+
+/** The output of `ctun projects list --json`: every project in each live cluster's job records. */
+export interface ProjectsReport {
+  clusters: {
+    cluster: string;
+    live: boolean;
+    /** False for a cluster configured without records; ctun skips it. */
+    job_records: boolean;
+    error: string | null;
+    /** Sorted by name; jobs without a project are not counted. */
+    projects: { project: string; jobs: number }[];
+  }[];
+}
+
+/** The output of `ctun projects rename --json`: the jobs whose project each live cluster renamed. */
+export interface ProjectRenameReport {
+  clusters: {
+    cluster: string;
+    live: boolean;
+    /** False for a cluster configured without records; ctun skips it. */
+    job_records: boolean;
+    error: string | null;
+    renamed: string[];
+  }[];
 }
 
 /** One command of `ctun -t X logs --json`. */
@@ -122,6 +170,8 @@ export class CtunError extends Error {
 }
 
 export const DEFAULT_TIMEOUT_MS = 60_000;
+/** `jobs edit` and `projects rename` read, check and write each job's record over SSH: a few round trips per job. */
+const EDIT_TIMEOUT_PER_JOB_MS = 10_000;
 
 export interface RunOptions {
   timeoutMs?: number;
@@ -151,7 +201,29 @@ export class Ctun {
 
   /** `since` is a ctun duration such as `24h`; `0` skips finished jobs. */
   jobs(since: string): Promise<JobsReport> {
-    return this.json<JobsReport>(["jobs", "--json", "--since", since]);
+    return this.json<JobsReport>(["jobs", "list", "--json", "--since", since]);
+  }
+
+  /** Every project in the job records of each live cluster, however old; reads every record. */
+  projects(): Promise<ProjectsReport> {
+    return this.json<ProjectsReport>(["projects", "list", "--json"]);
+  }
+
+  /** Gives the jobs `jobIds` of `cluster` the same edit in their records on the cluster; returns the records after it. */
+  editJobs(cluster: string, jobIds: readonly string[], edit: JobEdit): Promise<JobRecord[]> {
+    const options = [
+      ...(edit.project === undefined ? [] : [`--project=${edit.project}`]),
+      ...(edit.note === undefined ? [] : [`--note=${edit.note}`]),
+      ...(edit.confirmNote ? ["--confirm-note"] : []),
+    ];
+    const timeoutMs = this.timeoutMs + jobIds.length * EDIT_TIMEOUT_PER_JOB_MS;
+    return this.json<JobRecord[]>([...target(cluster), "jobs", "edit", ...jobIds, ...options], { timeoutMs });
+  }
+
+  /** Renames `project`, with the projects nested in it, in the records of its `jobCount` jobs on every live cluster. */
+  renameProject(project: string, renamed: string, jobCount: number): Promise<ProjectRenameReport> {
+    const timeoutMs = this.timeoutMs + jobCount * EDIT_TIMEOUT_PER_JOB_MS;
+    return this.json<ProjectRenameReport>(["projects", "rename", "--json", "--", project, renamed], { timeoutMs });
   }
 
   /** The commands sent to `cluster` this session; a local file read, no SSH. */
@@ -189,8 +261,8 @@ export class Ctun {
     });
   }
 
-  private async json<T>(args: readonly string[]): Promise<T> {
-    const stdout = await this.run(args);
+  private async json<T>(args: readonly string[], options: RunOptions = {}): Promise<T> {
+    const stdout = await this.run(args, options);
     try {
       return JSON.parse(stdout) as T;
     } catch {

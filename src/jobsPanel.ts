@@ -1,8 +1,9 @@
 import * as crypto from "crypto";
 import * as vscode from "vscode";
 import type { AddOnRegistry } from "./addOnRegistry";
-import { DetailLine, jobRefs } from "./addOns";
+import { DetailLine, JobRef, jobRefs } from "./addOns";
 import type { ClusterData } from "./clusterData";
+import { Ctun, CtunError, JobEdit } from "./ctun";
 import {
   ALL_CLUSTERS,
   buildJobsTable,
@@ -14,13 +15,15 @@ import {
   JobsFilters,
   JobsSort,
   JobsTableModel,
+  projectLabel,
   projectOf,
   RowExtras,
+  sortProjects,
+  UNASSIGNED,
 } from "./jobsTable";
 import { StateGroupId, stateGroup } from "./jobStates";
 import type { HiddenProjects } from "./hiddenProjects";
-import { selfAndAncestors } from "./projectTree";
-import type { ReviewStatus, ReviewStore } from "./reviews";
+import { normalizeProject, selfAndAncestors } from "./projectTree";
 
 /** Each refresh runs `sacct` on a login node, so not more often than this. */
 const AUTO_REFRESH_MS = 60_000;
@@ -30,9 +33,9 @@ export interface JobsPanelServices {
   data: ClusterData;
   hiddenProjects: HiddenProjects;
   addOns: AddOnRegistry;
-  reviews: ReviewStore;
-  /** Called after a review changed, so the badge and status bar follow. */
-  onReviewsChanged: () => void;
+  ctun: () => Ctun;
+  /** Every project of all time and every draft, for Move to Project. */
+  knownProjects: () => string[];
   loadChanges: (cluster: string, workdir: string, fromCommit: string, toCommit: string) => Promise<ChangesState>;
 }
 
@@ -47,8 +50,12 @@ type WebviewMessage =
   | { type: "refresh" }
   | { type: "login"; cluster: string }
   | { type: "expand"; key: string }
+  | { type: "select"; key: string; extend: "toggle" | "range" }
+  | { type: "clearSelection" }
+  | { type: "moveToProject" }
+  | { type: "dropOnProject"; keys: string[]; project: string }
   | { type: "setMode"; mode: JobsTableModel["mode"] }
-  | { type: "review"; reviewKey: string; action: "confirm" | "edit" | "discard" }
+  | { type: "review"; key: string; action: "confirm" | "edit" | "discard" }
   | { type: "loadChanges"; key: string }
   | { type: "showJob"; key: string }
   | { type: "openUrl"; url: string }
@@ -61,6 +68,9 @@ export class JobsPanel {
   private filters: JobsFilters = DEFAULT_FILTERS;
   private mode: JobsTableModel["mode"] = "jobs";
   private readonly expanded = new Set<string>();
+  private readonly selected = new Set<string>();
+  /** The row a Shift-click selects from: the last one clicked or Ctrl-clicked. */
+  private selectionAnchor: string | undefined;
   /** Folded project bands; kept while the tab is open. */
   private readonly collapsedProjects = new Set<string>();
   /** Kept while the tab is open. */
@@ -86,9 +96,9 @@ export class JobsPanel {
     return JobsPanel.current;
   }
 
-  /** Re-renders an open panel, e.g. after a review changed elsewhere. */
-  static refreshView(): void {
-    JobsPanel.current?.post();
+  /** The open panel, for the commands of its rows' context menu. */
+  static get open(): JobsPanel | undefined {
+    return JobsPanel.current;
   }
 
   private constructor(
@@ -160,20 +170,35 @@ export class JobsPanel {
         this.setFilters({ ...this.filters, since: message.since });
         return;
       case "refresh":
-        await this.refresh();
+        await this.refresh("withProjects");
         return;
       case "login":
         void vscode.commands.executeCommand("ctun.login", message.cluster);
         return;
       case "expand":
+        this.selected.clear();
+        this.selectionAnchor = message.key;
         this.toggleExpanded(message.key);
         return;
       case "setMode":
         this.mode = message.mode;
         this.post();
         return;
+      case "select":
+        this.select(message.key, message.extend);
+        return;
+      case "clearSelection":
+        this.selected.clear();
+        this.post();
+        return;
+      case "moveToProject":
+        await this.moveToProject();
+        return;
+      case "dropOnProject":
+        await this.moveJobs(message.keys, message.project);
+        return;
       case "review":
-        await this.review(message.reviewKey, message.action);
+        await this.review(message.key, message.action);
         return;
       case "loadChanges":
         await this.loadChanges(message.key);
@@ -215,29 +240,135 @@ export class JobsPanel {
     void this.loadAddOnLines(key);
   }
 
-  private async review(reviewKey: string, action: "confirm" | "edit" | "discard"): Promise<void> {
-    const statuses: Record<typeof action, ReviewStatus> = { confirm: "confirmed", edit: "edited", discard: "discarded" };
-    let text: string | undefined;
-    if (action === "edit") {
-      text = await vscode.window.showInputBox({
-        title: `Edit the note for job ${reviewKey.split("/")[1]}`,
-        value: this.noteText(reviewKey),
-        prompt: "Your text replaces the agent's draft in this view; the record on the cluster stays as written.",
-      });
-      if (text === undefined) {
-        return;
+  /** Ctrl-click toggles one row; Shift-click selects the shown rows from the anchor to `key` and closes their details. */
+  private select(key: string, extend: "toggle" | "range"): void {
+    const shownKeys = this.shownRowKeys();
+    const anchorIndex = this.selectionAnchor === undefined ? -1 : shownKeys.indexOf(this.selectionAnchor);
+    if (extend === "range" && anchorIndex !== -1) {
+      const keyIndex = shownKeys.indexOf(key);
+      this.selected.clear();
+      for (const shown of shownKeys.slice(Math.min(anchorIndex, keyIndex), Math.max(anchorIndex, keyIndex) + 1)) {
+        this.selected.add(shown);
+        this.expanded.delete(shown);
       }
+    } else {
+      if (!this.selected.delete(key)) {
+        this.selected.add(key);
+      }
+      this.selectionAnchor = key;
     }
-    await this.services.reviews.set(reviewKey, statuses[action], text);
-    this.services.onReviewsChanged();
     this.post();
   }
 
-  private noteText(reviewKey: string): string {
-    const model = this.model();
-    const card = model.reviewCards.find((candidate) => candidate.reviewKey === reviewKey);
-    const row = model.groups.flatMap((group) => group.rows).find((candidate) => candidate.note?.reviewKey === reviewKey);
-    return card?.note ?? row?.note?.text ?? "";
+  /**
+   * Asks for a project and moves the jobs there: the selected ones, or only
+   * `clickedKey` when its row was right-clicked outside the selection.
+   */
+  async moveToProject(clickedKey?: string): Promise<void> {
+    const selectedKeys = this.selectedShownKeys();
+    const isOutsideSelection = clickedKey !== undefined && !selectedKeys.includes(clickedKey);
+    const keys = isOutsideSelection ? [clickedKey] : selectedKeys;
+    const project = await this.pickProject(keys.length);
+    if (project !== undefined) {
+      await this.moveJobs(keys, project);
+    }
+  }
+
+  /** Moves the jobs `keys` to `project` (`UNASSIGNED` clears it); the selection is cleared once they moved. */
+  async moveJobs(keys: readonly string[], project: string): Promise<void> {
+    const jobs = this.jobsOf(keys);
+    if (jobs.length === 0) {
+      return;
+    }
+    const edit = { project: project === UNASSIGNED ? "" : project };
+    if (await this.edit(jobs, edit, `Moving ${countText(jobs.length)} to ${projectLabel(project)}…`)) {
+      this.selected.clear();
+    }
+  }
+
+  /** Asks for the job's note and stores it as confirmed, since a human wrote it; an empty note removes it. */
+  async editNote(key: string): Promise<void> {
+    const [job] = this.jobsOf([key]);
+    if (!job) {
+      return;
+    }
+    const text = await vscode.window.showInputBox({
+      title: `Note for job ${job.jobId}`,
+      value: job.record?.note ?? "",
+      prompt: "Saved in the job's record on the cluster, as confirmed. Leave it empty to remove the note.",
+    });
+    if (text === undefined) {
+      return;
+    }
+    const edit: JobEdit = text.trim() ? { note: text, confirmNote: true } : { note: "" };
+    await this.edit([job], edit, `Saving the note of job ${job.jobId}…`);
+  }
+
+  private async review(key: string, action: "confirm" | "edit" | "discard"): Promise<void> {
+    if (action === "edit") {
+      await this.editNote(key);
+      return;
+    }
+    const edit: JobEdit = action === "confirm" ? { confirmNote: true } : { note: "" };
+    await this.edit(this.jobsOf([key]), edit, action === "confirm" ? "Confirming the note…" : "Removing the note…");
+  }
+
+  /** Quick pick of the known projects, Unassigned and a new one; undefined when cancelled. */
+  private async pickProject(jobCount: number): Promise<string | undefined> {
+    const projectItems = sortProjects(new Set([...this.services.knownProjects(), UNASSIGNED])).map((project) => ({
+      label: projectLabel(project),
+      project,
+    }));
+    const newProjectItem = { label: "$(add) New project…", project: undefined };
+    const picked = await vscode.window.showQuickPick([newProjectItem, ...projectItems], {
+      title: `Move ${countText(jobCount)} to project`,
+    });
+    if (picked !== newProjectItem) {
+      return picked?.project;
+    }
+    const name = await vscode.window.showInputBox({
+      title: `Move ${countText(jobCount)} to a new project`,
+      prompt: "A / nests it, e.g. htfm/multihead.",
+      validateInput: (value) => (normalizeProject(value) ? undefined : "Give the project a name."),
+    });
+    return name === undefined ? undefined : normalizeProject(name);
+  }
+
+  /** Runs one `ctun jobs edit` per cluster, then reloads all jobs; shows ctun's error and returns false if one fails. */
+  private async edit(jobs: readonly JobRef[], edit: JobEdit, progressTitle: string): Promise<boolean> {
+    const ctun = this.services.ctun();
+    const jobIdsByCluster = new Map<string, string[]>();
+    for (const job of jobs) {
+      jobIdsByCluster.set(job.cluster, [...(jobIdsByCluster.get(job.cluster) ?? []), job.jobId]);
+    }
+    try {
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: progressTitle }, async () => {
+        for (const [cluster, jobIds] of jobIdsByCluster) {
+          await ctun.editJobs(cluster, jobIds, edit);
+        }
+      });
+      return true;
+    } catch (error) {
+      if (!(error instanceof CtunError)) {
+        throw error;
+      }
+      void vscode.window.showErrorMessage(error.message);
+      return false;
+    } finally {
+      await this.refresh("withProjects");
+    }
+  }
+
+  private jobsOf(keys: readonly string[]): JobRef[] {
+    return jobRefs(this.services.data.jobs).filter((job) => keys.includes(job.key));
+  }
+
+  private shownRowKeys(): string[] {
+    return this.model().groups.flatMap((band) => band.rows.map((row) => row.key));
+  }
+
+  private selectedShownKeys(): string[] {
+    return this.shownRowKeys().filter((key) => this.selected.has(key));
   }
 
   private projectOfRow(key: string): string {
@@ -291,11 +422,14 @@ export class JobsPanel {
     this.post();
   }
 
-  private async refresh(onlyIfStale = false): Promise<void> {
+  /** `ifStale` when the tab shows again, `jobs` for the timer and a new window, `withProjects` for Refresh and after an edit. */
+  private async refresh(scope: "ifStale" | "jobs" | "withProjects" = "jobs"): Promise<void> {
+    const { data } = this.services;
+    const loads = { ifStale: () => data.refreshIfStale(), jobs: () => data.refresh(), withProjects: () => data.refreshWithProjects() };
     this.refreshing = true;
     this.post();
     try {
-      await (onlyIfStale ? this.services.data.refreshIfStale() : this.services.data.refresh());
+      await loads[scope]();
     } finally {
       this.refreshing = false;
       this.post();
@@ -307,7 +441,7 @@ export class JobsPanel {
     clearInterval(this.refreshTimer);
     this.refreshTimer = undefined;
     if (this.panel.visible) {
-      void this.refresh(true);
+      void this.refresh("ifStale");
       this.refreshTimer = setInterval(() => void this.refresh(), AUTO_REFRESH_MS);
     }
   }
@@ -320,9 +454,9 @@ export class JobsPanel {
       loggingIn,
       filters: this.filters,
       updatedAt,
-      reviews: this.services.reviews.all(),
       mode: this.mode,
       expanded: this.expanded,
+      selected: this.selected,
       extras: this.extras,
       collapsedProjects: this.collapsedProjects,
       sort: this.sort,
@@ -345,6 +479,11 @@ export class JobsPanel {
     this.disposables.forEach((disposable) => disposable.dispose());
     JobsPanel.current = undefined;
   }
+}
+
+/** `1 job`, `3 jobs`. */
+function countText(jobCount: number): string {
+  return jobCount === 1 ? "1 job" : `${jobCount} jobs`;
 }
 
 /** A click on a column sorts it ascending, then descending, then back to the default sort. */

@@ -81,6 +81,39 @@
         "icon": "$(comment-unresolved)"
       },
       {
+        "command": "ctun.moveToProject",
+        "title": "Move to Project…",
+        "category": "ctun"
+      },
+      {
+        "command": "ctun.editNote",
+        "title": "Edit Note…",
+        "category": "ctun"
+      },
+      {
+        "command": "ctun.newProject",
+        "title": "New Project…",
+        "category": "ctun",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "ctun.aboutDraftProjects",
+        "title": "What Is a Draft Project?",
+        "category": "ctun",
+        "icon": "$(info)"
+      },
+      {
+        "command": "ctun.renameProject",
+        "title": "Rename Project…",
+        "category": "ctun"
+      },
+      {
+        "command": "ctun.deleteDraftProject",
+        "title": "Delete Draft Project",
+        "category": "ctun",
+        "icon": "$(trash)"
+      },
+      {
         "command": "ctun.hideProject",
         "title": "Hide Project",
         "category": "ctun",
@@ -162,6 +195,11 @@
           "command": "ctun.openConfig",
           "when": "view == ctun.clusters",
           "group": "navigation@2"
+        },
+        {
+          "command": "ctun.newProject",
+          "when": "view == ctun.projects",
+          "group": "navigation@0"
         }
       ],
       "view/item/context": [
@@ -177,16 +215,59 @@
         },
         {
           "command": "ctun.hideProject",
-          "when": "view == ctun.projects && viewItem == project-shown",
+          "when": "view == ctun.projects && viewItem =~ /^(project|unassigned)-shown$/",
           "group": "inline"
         },
         {
           "command": "ctun.showProject",
-          "when": "view == ctun.projects && viewItem == project-hidden",
+          "when": "view == ctun.projects && viewItem =~ /^(project|unassigned)-hidden$/",
           "group": "inline"
+        },
+        {
+          "command": "ctun.aboutDraftProjects",
+          "when": "view == ctun.projects && viewItem == project-draft",
+          "group": "inline@0"
+        },
+        {
+          "command": "ctun.deleteDraftProject",
+          "when": "view == ctun.projects && viewItem == project-draft",
+          "group": "inline@1"
+        },
+        {
+          "command": "ctun.renameProject",
+          "when": "view == ctun.projects && viewItem =~ /^project-/",
+          "group": "edit@1"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "ctun.moveToProject",
+          "when": "webviewId == 'ctun.jobs' && webviewSection == 'job'",
+          "group": "edit@1"
+        },
+        {
+          "command": "ctun.editNote",
+          "when": "webviewId == 'ctun.jobs' && webviewSection == 'job'",
+          "group": "edit@2"
         }
       ],
       "commandPalette": [
+        {
+          "command": "ctun.deleteDraftProject",
+          "when": "false"
+        },
+        {
+          "command": "ctun.renameProject",
+          "when": "false"
+        },
+        {
+          "command": "ctun.moveToProject",
+          "when": "false"
+        },
+        {
+          "command": "ctun.editNote",
+          "when": "false"
+        },
         {
           "command": "ctun.login",
           "when": "false"

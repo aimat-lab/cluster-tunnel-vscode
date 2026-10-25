@@ -1,4 +1,4 @@
-import type { CtunErrorKind } from "./ctun";
+import { CtunErrorKind, MINIMUM_CTUN_VERSION } from "./ctun";
 import type { LoginMethod } from "./login";
 
 /** `off`: an optional feature nobody set up; `broken`: needs fixing before it works; `plain`: a preference or a link, with no state to check. */
@@ -20,6 +20,8 @@ export interface SetupCheck {
 
 export interface SetupInputs {
   ctunPath: string;
+  /** What `ctun --version` printed; undefined while unknown. */
+  ctunVersion: string | undefined;
   /** False until the first refresh finished. */
   refreshed: boolean;
   ctunError: { kind: CtunErrorKind; message: string } | undefined;
@@ -41,10 +43,19 @@ export function setupChecks(inputs: SetupInputs): SetupCheck[] {
   return [ctunCheck(inputs), clustersCheck(inputs), loginMethodCheck(inputs), skillCheck(inputs.skill), ...inputs.addOnChecks];
 }
 
-function ctunCheck({ ctunPath, refreshed, ctunError }: SetupInputs): SetupCheck {
+function ctunCheck({ ctunPath, ctunVersion, refreshed, ctunError }: SetupInputs): SetupCheck {
   const fix: SetupFix = { kind: "setting", id: "ctun.path" };
   if (ctunError?.kind === "not_found") {
     return { label: "ctun", health: "broken", description: `not found at ${ctunPath}`, fix };
+  }
+  if (ctunVersion !== undefined && isOlder(ctunVersion, MINIMUM_CTUN_VERSION)) {
+    return {
+      label: "ctun",
+      health: "broken",
+      description: `${ctunVersion}, needs ${MINIMUM_CTUN_VERSION} or newer`,
+      tooltip: `${ctunPath} is too old to list and edit jobs. Update it, e.g. with: uv tool upgrade cluster-tunnel`,
+      fix,
+    };
   }
   if (ctunError) {
     return { label: "ctun", health: "broken", description: "fails", tooltip: ctunError.message, fix };
@@ -52,7 +63,22 @@ function ctunCheck({ ctunPath, refreshed, ctunError }: SetupInputs): SetupCheck 
   if (!refreshed) {
     return { label: "ctun", health: "checking", description: "checking…", fix };
   }
-  return { label: "ctun", health: "ok", description: ctunPath, fix };
+  return { label: "ctun", health: "ok", description: ctunVersion ?? ctunPath, tooltip: ctunPath, fix };
+}
+
+/** Compares the release part only, so `0.9.0.dev1` counts as `0.9.0`; a version it can't read is never older. */
+function isOlder(version: string, minimum: string): boolean {
+  const release = (text: string) => /^(\d+)\.(\d+)\.(\d+)/.exec(text)?.slice(1).map(Number);
+  const [have, need] = [release(version), release(minimum)];
+  if (!have || !need) {
+    return false;
+  }
+  for (let index = 0; index < need.length; index++) {
+    if (have[index] !== need[index]) {
+      return have[index] < need[index];
+    }
+  }
+  return false;
 }
 
 function clustersCheck({ refreshed, ctunError, clusterCount }: SetupInputs): SetupCheck {

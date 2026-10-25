@@ -9,7 +9,7 @@ All notable changes to the ctun VS Code extension. The format follows
 
 - Clusters view from `ctun status -j`: status, session start, budget used / limit,
   commands sent, running and queued jobs; log in (ctun's login window) and log out.
-- "Cluster jobs" tab from `ctun jobs --json`: one list filtered by state toggles,
+- "Cluster jobs" tab from `ctun jobs list --json`: one list filtered by state toggles,
   an "Ended in" window and cluster chips; refreshes every 60 s while visible.
 - Status-bar entry with the connected clusters and their budget use.
 - Every column of the job list sorts on a click of its header (ascending,
@@ -30,9 +30,28 @@ All notable changes to the ctun VS Code extension. The format follows
   documentation.
 - Add-ons: an internal interface through which a library adds lines in a
   job's details and a Setup row; each add-on is off by default.
-- Agent notes: the note under each job name, Confirm / Edit / Discard (kept in
-  `globalState`, synced by Settings Sync), a "To review" mode with cards, the
-  activity-bar badge and the status-bar count.
+- Agent notes: the note under each job name, Confirm / Edit / Discard, a "To
+  review" mode with cards, the activity-bar badge and the status-bar count. A
+  review is stored in the job's record through `ctun jobs edit`
+  (`--confirm-note`, `--note`), so every machine and agent sees it.
+- Editing jobs: Ctrl/Shift-click selects rows, and the selection drags onto a
+  project in the Projects view or a band in the table; **Move to project…** (to an
+  existing, Unassigned or new project) and **Edit Note…** run `ctun jobs edit`,
+  from the selection bar or a row's context menu. A job's details list the
+  record's edits; a record that `jobs edit` made without facts says so.
+- Projects view: it lists every project of all time from `ctun projects list`,
+  with all-time job counts, not only those of the "Ended in" window; Unassigned
+  still counts the window's jobs.
+- Projects view: **New Project…** in its title bar makes an empty draft project
+  inside the selected one, to drop jobs on. Drafts are kept in `globalState`. A
+  project without jobs is marked "draft", with an (i) that explains why and a
+  trash icon that deletes it.
+- Projects view: drag a project onto another to nest it there, or onto "All
+  projects" to move it to the top; **Rename Project…** in its context menu
+  renames it. After a confirmation, both run `ctun projects rename`, so every
+  job of the project and of those nested in it follows, also outside the
+  "Ended in" window. Drafts and hidden projects follow too.
+- Setup view: the ctun row shows ctun's version and marks one older than 0.9.0.
 - Job details: commit, pushed or not, uncommitted files, submitting machine, the
   previous run of the same job and the commits since it.
 - W&B add-on (`ctun.addons.wandb.enabled`): the job's run found by its tag

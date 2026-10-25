@@ -175,7 +175,7 @@ test("a column header sorts by its column and shows the direction", () => {
   const sortedHeader = app.querySelector("[role=columnheader][aria-sort]")!;
   assert.strictEqual(sortedHeader.getAttribute("aria-sort"), "descending");
   assert.strictEqual(sortedHeader.textContent, "State↓");
-  click("Partition");
+  click("Partition · nodes");
   assert.deepStrictEqual(sent.at(-1), { type: "sort", column: "partition" });
 });
 

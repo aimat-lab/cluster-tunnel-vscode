@@ -8,7 +8,7 @@ export const COLUMNS = [
   { id: "state", label: "State", width: 120 },
   { id: "start", label: "Start", width: 140 },
   { id: "elapsed", label: "Elapsed / limit", width: 160 },
-  { id: "partition", label: "Partition", width: 100 },
+  { id: "partition", label: "Partition · nodes", width: 140 },
 ] as const;
 
 export type ColumnId = (typeof COLUMNS)[number]["id"];

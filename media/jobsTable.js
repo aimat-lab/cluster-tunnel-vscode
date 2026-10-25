@@ -12,6 +12,8 @@
   /** Pixels a nesting level indents a band's name and a job's ID. */
   const INDENT_STEP = 16;
   const MIN_COLUMN_WIDTH = 60;
+  /** How long the table takes to fold into the project bands and back: --fold-duration in the CSS. */
+  const FOLD_MS = 240;
   /** The width Note keeps however narrow the tab gets. */
   const FLEXIBLE_MIN_WIDTH = 160;
   /** The last model, for the drag image, a live column resize and the column menu. */
@@ -347,19 +349,22 @@
       document.body.append(image);
       event.dataTransfer.setDragImage(image, 16, 16);
       drag = { scrollY: window.scrollY, deferredMessage: undefined };
-      // Hiding the dragged row inside dragstart would cancel the drag, so fold just after it.
+      // Changing the dragged row inside dragstart would cancel the drag, so fold just after it.
       setTimeout(() => {
         image.remove();
         app.classList.add("dragging-jobs");
-        app.querySelector(".grid")?.scrollIntoView({ block: "start" });
+        app.querySelector(".grid")?.scrollIntoView({ block: "start", behavior: "smooth" });
       });
     });
+    // Unfold first; a model that came meanwhile renders once the rows are back, so it does not cut the animation.
     row.addEventListener("dragend", () => {
-      const { scrollY, deferredMessage } = drag;
-      drag = undefined;
       app.classList.remove("dragging-jobs");
-      if (deferredMessage) render(deferredMessage);
-      window.scrollTo(0, scrollY);
+      setTimeout(() => {
+        const { scrollY, deferredMessage } = drag;
+        drag = undefined;
+        if (deferredMessage) render(deferredMessage);
+        window.scrollTo({ top: scrollY, behavior: "smooth" });
+      }, FOLD_MS);
     });
   }
 
@@ -643,9 +648,16 @@
       body.append(fullWidthRow("notice", text, action));
     }
 
-    grid.append(head, body, dropTargets());
+    grid.append(head, foldArea("rows-fold", body), foldArea("targets-fold", dropTargets()));
     wrapper.append(grid);
     return wrapper;
+  }
+
+  /** A box whose height can animate to nothing and back, around `content`. */
+  function foldArea(className, content) {
+    const area = el("div", `fold-area ${className}`);
+    area.append(content);
+    return area;
   }
 
   /** One folded band per project, shown in place of the job rows while jobs are dragged. */
@@ -715,6 +727,7 @@
     shownRows = model.groups.flatMap((band) => band.rows);
     const focusedKey = /** @type {HTMLElement | null} */ (document.activeElement)?.dataset?.key;
     app.style.setProperty("--indent-step", `${INDENT_STEP}px`);
+    app.style.setProperty("--fold-duration", `${FOLD_MS}ms`);
     app.replaceChildren(toolbar(message.refreshing));
     if (message.error) app.append(el("p", "notice error", `ctun failed: ${message.error}`));
     app.append(model.mode === "review" ? reviewView() : table());

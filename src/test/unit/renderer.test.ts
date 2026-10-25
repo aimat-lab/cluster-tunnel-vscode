@@ -167,6 +167,8 @@ test("a drag folds the table into one band per known project and unfolds it afte
   assert.strictEqual(sortedColumn(), sortedBefore, "a model during the drag waits for its end");
   row.dispatchEvent(dragEvent("dragend"));
   assert.ok(!app.classList.contains("dragging-jobs"));
+  assert.strictEqual(sortedColumn(), sortedBefore, "the model waits until the rows have unfolded");
+  await new Promise((resolve) => setTimeout(resolve, 300));
   assert.match(sortedColumn() ?? "", /^State/);
 });
 

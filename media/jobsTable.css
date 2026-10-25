@@ -230,19 +230,22 @@ button:disabled { cursor: default; opacity: 0.6; }
 .group-completed, .group-other, .group-cancelled { --group-color: var(--muted); }
 .group-failed { --group-color: var(--failed); }
 
-/* While jobs drag, the rows fold away and the project bands unfold in their place. A grid track
-   from 1fr to 0fr animates the height without knowing it. */
-.fold-area {
-  display: grid;
-  grid-template-rows: 1fr;
-  transition: grid-template-rows var(--fold-duration) ease, opacity var(--fold-duration) ease;
+/* While jobs drag, the rows fade, then the project bands slide in one after another in their place.
+   After the drop the rows fade back in. */
+.targets-fold { display: none; }
+.dragging-jobs .rows-fold { opacity: 0; transition: opacity var(--fade-out-duration) ease; }
+.jobs-folded .rows-fold { display: none; }
+.jobs-folded .targets-fold { display: block; }
+.jobs-folded .targets-fold .group-row {
+  animation: band-in 200ms ease both;
+  animation-delay: calc(min(var(--band-index, 0), 12) * 18ms);
 }
-.fold-area > * { min-height: 0; overflow: hidden; }
-.targets-fold, .dragging-jobs .rows-fold { grid-template-rows: 0fr; opacity: 0; }
-.dragging-jobs .targets-fold { grid-template-rows: 1fr; opacity: 1; }
+.unfolding .rows-fold { animation: rows-in var(--unfold-duration) ease both; }
+@keyframes band-in { from { opacity: 0; transform: translateY(-6px); } }
+@keyframes rows-in { from { opacity: 0; transform: translateY(-4px); } }
 .group-row { transition: background-color 120ms ease, outline-color 120ms ease; }
 @media (prefers-reduced-motion: reduce) {
-  .fold-area, .group-row { transition: none; }
+  .rows-fold, .group-row, .targets-fold .group-row { transition: none !important; animation: none !important; }
 }
 .drag-image { position: fixed; top: -1000px; left: 0; display: flex; flex-direction: column; gap: 3px; }
 .drag-card {

@@ -12,8 +12,10 @@
   /** Pixels a nesting level indents a band's name and a job's ID. */
   const INDENT_STEP = 16;
   const MIN_COLUMN_WIDTH = 60;
-  /** How long the table takes to fold into the project bands and back: --fold-duration in the CSS. */
-  const FOLD_MS = 240;
+  /** How long the job rows fade before the project bands take their place; the CSS fade lasts as long. */
+  const FADE_OUT_MS = 140;
+  /** How long the job rows take to come back after a drag; the CSS `rows-in` animation lasts as long. */
+  const UNFOLD_MS = 220;
   /** The width Note keeps however narrow the tab gets. */
   const FLEXIBLE_MIN_WIDTH = 160;
   /** The last model, for the drag image, a live column resize and the column menu. */
@@ -349,22 +351,30 @@
       document.body.append(image);
       event.dataTransfer.setDragImage(image, 16, 16);
       drag = { scrollY: window.scrollY, deferredMessage: undefined };
-      // Changing the dragged row inside dragstart would cancel the drag, so fold just after it.
+      // Changing the dragged row inside dragstart would cancel the drag, so fade just after it,
+      // then swap the rows for the bands, which slide in one after another.
       setTimeout(() => {
         image.remove();
         app.classList.add("dragging-jobs");
-        app.querySelector(".grid")?.scrollIntoView({ block: "start", behavior: "smooth" });
+        setTimeout(() => {
+          if (!drag || drag.ending) return;
+          app.classList.add("jobs-folded");
+          app.querySelector(".grid")?.scrollIntoView({ block: "start", behavior: "smooth" });
+        }, FADE_OUT_MS);
       });
     });
-    // Unfold first; a model that came meanwhile renders once the rows are back, so it does not cut the animation.
+    // The rows fade back in; a model that came meanwhile renders after that, so it does not cut the animation.
     row.addEventListener("dragend", () => {
-      app.classList.remove("dragging-jobs");
+      drag.ending = true;
+      app.classList.remove("dragging-jobs", "jobs-folded");
+      app.classList.add("unfolding");
       setTimeout(() => {
         const { scrollY, deferredMessage } = drag;
         drag = undefined;
+        app.classList.remove("unfolding");
         if (deferredMessage) render(deferredMessage);
         window.scrollTo({ top: scrollY, behavior: "smooth" });
-      }, FOLD_MS);
+      }, UNFOLD_MS);
     });
   }
 
@@ -653,9 +663,9 @@
     return wrapper;
   }
 
-  /** A box whose height can animate to nothing and back, around `content`. */
+  /** A box the drag fades and swaps, around `content`. */
   function foldArea(className, content) {
-    const area = el("div", `fold-area ${className}`);
+    const area = el("div", className);
     area.append(content);
     return area;
   }
@@ -664,14 +674,15 @@
   function dropTargets() {
     const body = el("div", "drop-targets");
     body.setAttribute("role", "rowgroup");
-    for (const target of model.dropTargets) {
+    model.dropTargets.forEach((target, index) => {
       const row = el("div", target.depth === 0 ? "group-row top-level" : "group-row");
       row.setAttribute("role", "row");
       row.style.setProperty("--depth", String(target.depth));
+      row.style.setProperty("--band-index", String(index));
       row.append(icon("chevron", "chevron"), el("strong", "", target.label));
       acceptJobDrops(row, target.project);
       body.append(row);
-    }
+    });
     return body;
   }
 
@@ -727,7 +738,8 @@
     shownRows = model.groups.flatMap((band) => band.rows);
     const focusedKey = /** @type {HTMLElement | null} */ (document.activeElement)?.dataset?.key;
     app.style.setProperty("--indent-step", `${INDENT_STEP}px`);
-    app.style.setProperty("--fold-duration", `${FOLD_MS}ms`);
+    app.style.setProperty("--fade-out-duration", `${FADE_OUT_MS}ms`);
+    app.style.setProperty("--unfold-duration", `${UNFOLD_MS}ms`);
     app.replaceChildren(toolbar(message.refreshing));
     if (message.error) app.append(el("p", "notice error", `ctun failed: ${message.error}`));
     app.append(model.mode === "review" ? reviewView() : table());

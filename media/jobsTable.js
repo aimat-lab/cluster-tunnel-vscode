@@ -16,6 +16,10 @@
   const FOLD_MS = 260;
   /** Starts fast and settles gently, like VS Code's own list motion. */
   const FOLD_EASING = "cubic-bezier(0.2, 0, 0, 1)";
+  /** After a fold or a click on a job, renders this soon animate: the answer, and details that load a moment later. */
+  const ANIMATED_RENDER_WINDOW_MS = 1500;
+  /** Until when a render animates what it changed; 0 for a refresh nobody asked for. */
+  let animateUntil = 0;
   /** The width Note keeps however narrow the tab gets. */
   const FLEXIBLE_MIN_WIDTH = 160;
   /** The last model, for the drag image, a live column resize and the column menu. */
@@ -314,6 +318,7 @@
     row.dataset.project = band.project;
     row.style.setProperty("--depth", String(band.depth));
     const fold = button("fold", undefined, { type: "toggleProject", project: band.project });
+    fold.addEventListener("click", animateNextRenders);
     fold.append(icon("chevron", "chevron"));
     fold.setAttribute("aria-expanded", String(!band.collapsed));
     fold.setAttribute("aria-label", `${band.collapsed ? "Unfold" : "Fold"} ${band.label}`);
@@ -357,7 +362,7 @@
       // Changing the dragged row inside dragstart would cancel the drag, so fold just after it.
       setTimeout(() => {
         image.remove();
-        const ghosts = fadingCopies(visibleRows());
+        const ghosts = fadingCopies(onScreen(".rows-fold .job, .rows-fold .details-row"));
         glide(".rows-fold .group-row", ".targets-fold .group-row", () => {
           app.classList.add("dragging-jobs");
           app.querySelector(".grid")?.scrollIntoView({ block: "start" });
@@ -410,31 +415,32 @@
     return offsets;
   }
 
-  /** The job and details rows on screen now; only these are animated, so a long table costs no more. */
-  function visibleRows() {
+  /** The rows matching `selector` on screen now, with their boxes; only these animate, so a long table costs no more. */
+  function onScreen(selector) {
     const bottom = window.innerHeight;
-    return [...app.querySelectorAll(".rows-fold .job, .rows-fold .details-row")].filter((node) => {
-      const box = node.getBoundingClientRect();
-      return box.bottom > 0 && box.top < bottom;
-    });
+    return [...app.querySelectorAll(selector)]
+      .map((node) => ({ node, box: node.getBoundingClientRect() }))
+      .filter(({ box }) => box.bottom > 0 && box.top < bottom);
   }
 
   /**
-   * Copies of `rows` in a fixed layer at their place on screen, under the bands, so the jobs
-   * can fade while the table under them has already folded.
+   * Copies of rows in a fixed layer at the boxes they had, under the bands, so they can fade
+   * while the table under them has already changed. The layer sits outside the app, so a
+   * render does not take it away.
    */
   function fadingCopies(rows) {
     if (rows.length === 0 || prefersNoAnimation()) return undefined;
+    document.querySelector(".fading-rows")?.remove();
     const layer = el("div", "fading-rows");
     layer.style.setProperty("--columns", app.querySelector(".grid")?.style.getPropertyValue("--columns") ?? "");
-    for (const node of rows) {
-      const box = node.getBoundingClientRect();
+    layer.style.setProperty("--indent-step", `${INDENT_STEP}px`);
+    for (const { node, box } of rows) {
       const copy = /** @type {HTMLElement} */ (node.cloneNode(true));
       copy.removeAttribute("tabindex");
       Object.assign(copy.style, { top: `${box.top}px`, left: `${box.left}px`, width: `${box.width}px`, height: `${box.height}px` });
       layer.append(copy);
     }
-    app.append(layer);
+    document.body.append(layer);
     return layer;
   }
 
@@ -461,6 +467,52 @@
       const from = reduced ? { opacity: 0 } : { opacity: 0, transform: `translateY(${offset}px)` };
       node.animate([from, { opacity: 1, transform: "none" }], { duration: FOLD_MS, easing: FOLD_EASING });
     }
+  }
+
+  function animateNextRenders() {
+    animateUntil = Date.now() + ANIMATED_RENDER_WINDOW_MS;
+  }
+
+  /** Each band, job and details row on screen with its box, by a key that survives a render. */
+  function rowPositions() {
+    const positions = new Map();
+    for (const row of onScreen(".rows-fold .job-rows > *")) {
+      const key = rowKeyOf(row.node);
+      if (key) positions.set(key, row);
+    }
+    return positions;
+  }
+
+  function rowKeyOf(node) {
+    if (node.classList.contains("group-row")) return `band:${node.dataset.project}`;
+    if (node.classList.contains("details-row")) return `details:${node.dataset.rowKey}`;
+    if (node.classList.contains("job")) return `job:${node.dataset.rowKey}`;
+    return undefined;
+  }
+
+  /**
+   * After a render the user asked for, lets the table change gently instead of jumping: rows
+   * that stayed glide from their old place, new rows fade in (details unroll from the top),
+   * and rows that went away fade from where they were. Only rows on screen take part.
+   */
+  function animateChanges(before) {
+    const reduced = prefersReducedMotion();
+    const timing = { duration: FOLD_MS, easing: FOLD_EASING };
+    const after = rowPositions();
+    for (const [key, { node, box }] of after) {
+      const old = before.get(key);
+      if (old) {
+        const offset = old.box.top - box.top;
+        if (!reduced && Math.abs(offset) > 0.5) node.animate([{ transform: `translateY(${offset}px)` }, { transform: "none" }], timing);
+      } else if (reduced) {
+        node.animate([{ opacity: 0 }, { opacity: 1 }], timing);
+      } else if (key.startsWith("details:")) {
+        node.animate([{ opacity: 0, clipPath: "inset(0 0 100% 0)" }, { opacity: 1, clipPath: "inset(0)" }], timing);
+      } else {
+        node.animate([{ opacity: 0, transform: "translateY(-8px)" }, { opacity: 1, transform: "none" }], timing);
+      }
+    }
+    fadeOut(fadingCopies([...before].filter(([key]) => !after.has(key)).map(([, row]) => row)));
   }
 
   /** True where the page cannot animate at all, such as in tests. */
@@ -550,7 +602,10 @@
     node.setAttribute("aria-expanded", String(row.expanded));
     node.setAttribute("aria-selected", String(row.selected));
     dragJobs(node, row);
-    const toggle = () => vscode.postMessage({ type: "expand", key: row.key });
+    const toggle = () => {
+      animateNextRenders();
+      vscode.postMessage({ type: "expand", key: row.key });
+    };
     // A Shift-click would otherwise select the text between the two clicks.
     node.addEventListener("mousedown", (event) => {
       if (event.shiftKey) event.preventDefault();
@@ -687,6 +742,7 @@
     const details = row.details;
     const node = el("div", "details-row");
     node.setAttribute("role", "row");
+    node.dataset.rowKey = row.key;
     node.style.setProperty("--depth", String(depth));
     const list = el("dl", "details");
     if (!details.hasRecord) {
@@ -832,6 +888,7 @@
   });
 
   function render(message) {
+    const before = Date.now() < animateUntil && !prefersNoAnimation() ? rowPositions() : undefined;
     model = message.model;
     reduceMotion = message.reduceMotion ?? "auto";
     shownRows = model.groups.flatMap((band) => band.rows);
@@ -842,6 +899,7 @@
     app.append(model.mode === "review" ? reviewView() : table());
     app.setAttribute("aria-busy", String(message.refreshing));
     renderColumnMenu();
+    if (before) animateChanges(before);
     restoreFocus(focusedKey);
     scrollToRevealed(message.reveal);
   }

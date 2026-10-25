@@ -147,13 +147,15 @@ button:disabled { cursor: default; opacity: 0.6; }
   position: sticky;
   top: var(--toolbar-height);
   z-index: 2;
-  height: var(--row-height);
+  height: 30px;
   align-items: stretch;
-  border-bottom: 1px solid var(--border);
-  background: var(--vscode-editor-background);
+  /* The header of VS Code's own tables, such as the keyboard shortcuts editor. */
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-foreground) 22%, var(--vscode-editor-background));
+  background: var(--vscode-keybindingTable-headerBackground, color-mix(in srgb, var(--vscode-foreground) 7%, var(--vscode-editor-background)));
   font-size: 12px;
+  font-weight: 600;
 }
-.th { position: relative; display: flex; align-items: center; min-width: 0; padding: 0 var(--cell-padding); color: var(--muted); }
+.th { position: relative; display: flex; align-items: center; min-width: 0; padding: 0 var(--cell-padding); color: color-mix(in srgb, var(--vscode-foreground) 80%, transparent); }
 .th[draggable="true"] { cursor: grab; }
 .th.moving { opacity: 0.5; }
 .th.drop-before { box-shadow: inset 2px 0 0 var(--accent); }

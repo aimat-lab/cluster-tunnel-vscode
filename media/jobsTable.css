@@ -184,6 +184,12 @@ button:disabled { cursor: default; opacity: 0.6; }
   height: var(--row-height);
   padding: 0 var(--gutter) 0 calc(var(--gutter) + var(--depth, 0) * var(--indent-step));
   border-bottom: 1px solid var(--border);
+  /* A tint of the text color stands out from the job rows in every theme; a top-level project a bit more. */
+  background: color-mix(in srgb, var(--vscode-foreground) 5%, var(--vscode-editor-background));
+}
+.group-row.top-level {
+  background: color-mix(in srgb, var(--vscode-foreground) 9%, var(--vscode-editor-background));
+  border-top: 1px solid color-mix(in srgb, var(--vscode-foreground) 14%, var(--vscode-editor-background));
 }
 .group-row .count, .band-note { color: var(--muted); }
 .group-row.drop-target { outline: 1px dashed var(--accent); outline-offset: -1px; background: var(--hover); }

@@ -303,7 +303,7 @@
 
   /** A project's band: fold button, name, job count and, for Unassigned, why. Its name is indented by its depth. */
   function projectBand(band) {
-    const row = el("div", "group-row");
+    const row = el("div", band.depth === 0 ? "group-row top-level" : "group-row");
     row.setAttribute("role", "row");
     row.style.setProperty("--depth", String(band.depth));
     const fold = button("fold", undefined, { type: "toggleProject", project: band.project });
@@ -653,7 +653,7 @@
     const body = el("div", "drop-targets");
     body.setAttribute("role", "rowgroup");
     for (const target of model.dropTargets) {
-      const row = el("div", "group-row");
+      const row = el("div", target.depth === 0 ? "group-row top-level" : "group-row");
       row.setAttribute("role", "row");
       row.style.setProperty("--depth", String(target.depth));
       row.append(icon("chevron", "chevron"), el("strong", "", target.label));

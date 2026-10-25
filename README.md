@@ -136,6 +136,13 @@ npm run package     # builds cluster-tunnel-<version>.vsix
 
 Press F5 with this folder open to start an Extension Development Host.
 
+To package and install the extension into your VS Code after every commit, turn
+on the repo's hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 Branches: `main` holds what works with the released ctun and is what gets
 published; `dev` adds the features that need ctun changes not released yet.
 Publishing is described in [PUBLISHING.md](PUBLISHING.md).

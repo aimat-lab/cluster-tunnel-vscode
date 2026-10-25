@@ -10,3 +10,4 @@ PUBLISHING.md
 .github/**
 .gitattributes
 docs/plans/**
+.githooks/**

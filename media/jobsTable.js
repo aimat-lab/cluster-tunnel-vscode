@@ -894,7 +894,9 @@
     shownRows = model.groups.flatMap((band) => band.rows);
     const focusedKey = /** @type {HTMLElement | null} */ (document.activeElement)?.dataset?.key;
     app.style.setProperty("--indent-step", `${INDENT_STEP}px`);
-    app.replaceChildren(toolbar(message.refreshing));
+    const bar = toolbar(message.refreshing);
+    app.replaceChildren(bar);
+    followToolbarHeight(bar);
     if (message.error) app.append(el("p", "notice error", `ctun failed: ${message.error}`));
     app.append(model.mode === "review" ? reviewView() : table());
     app.setAttribute("aria-busy", String(message.refreshing));
@@ -902,6 +904,18 @@
     if (before) animateChanges(before);
     restoreFocus(focusedKey);
     scrollToRevealed(message.reveal);
+  }
+
+  /** The header row sticks right below the toolbar, whose height changes when it wraps on a narrow tab. */
+  let toolbarObserver;
+  function followToolbarHeight(bar) {
+    toolbarObserver?.disconnect();
+    const setHeight = () => document.body.style.setProperty("--toolbar-height", `${bar.offsetHeight}px`);
+    setHeight();
+    if (typeof ResizeObserver === "function") {
+      toolbarObserver = new ResizeObserver(setHeight);
+      toolbarObserver.observe(bar);
+    }
   }
 
   /** Scrolls to the row another tab asked for, once; waits for a later model while the row is not there yet. */

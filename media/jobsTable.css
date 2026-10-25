@@ -137,7 +137,17 @@ button:disabled { cursor: default; opacity: 0.6; }
 
 /* The table: a CSS grid whose tracks every row shares, so cells line up whatever the nesting. */
 /* No scroll box of its own: the page scrolls, so the toolbar and the header row stay sticky. */
-.table-wrapper { min-width: 0; }
+.table-wrapper { min-width: 0; padding: 12px var(--gutter) 24px; }
+/* The table as a card with rounded corners. `overflow: clip` cuts the corners without making a
+   scroll box, so the header row still sticks to the page. */
+.grid {
+  --gutter: 12px;
+  border: 1px solid color-mix(in srgb, var(--vscode-foreground) 16%, var(--vscode-editor-background));
+  border-radius: 8px;
+  overflow: clip;
+}
+.grid .job-rows > :last-child, .grid .drop-targets > :last-child { border-bottom: 0; }
+.selection-bar { margin-bottom: 8px; border: 0; border-radius: 6px; }
 .header-row, .job, .details-row {
   display: grid;
   grid-template-columns: var(--columns);
@@ -151,7 +161,11 @@ button:disabled { cursor: default; opacity: 0.6; }
   align-items: stretch;
   /* The header of VS Code's own tables, such as the keyboard shortcuts editor. */
   border-bottom: 1px solid color-mix(in srgb, var(--vscode-foreground) 22%, var(--vscode-editor-background));
-  background: var(--vscode-keybindingTable-headerBackground, color-mix(in srgb, var(--vscode-foreground) 7%, var(--vscode-editor-background)));
+  /* That color is see-through in most themes, so it lies on the editor background: rows never show through. */
+  background:
+    linear-gradient(var(--header-tint), var(--header-tint)),
+    var(--vscode-editor-background);
+  --header-tint: var(--vscode-keybindingTable-headerBackground, color-mix(in srgb, var(--vscode-foreground) 7%, transparent));
   font-size: 12px;
   font-weight: 600;
 }

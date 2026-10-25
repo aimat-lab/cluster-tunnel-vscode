@@ -403,11 +403,12 @@
     }
   }
 
-  /** VS Code's `workbench.reduceMotion`: "on" and "off" decide, "auto" follows the system. */
+  /**
+   * True only when VS Code's `workbench.reduceMotion` is "on". The system setting is not asked:
+   * the drag's motion is short and tells where the jobs went, so it stays the same on every machine.
+   */
   function prefersReducedMotion() {
-    if (reduceMotion === "on") return true;
-    if (reduceMotion === "off") return false;
-    return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return reduceMotion === "on";
   }
 
   const DRAG_IMAGE_ROWS = 3;

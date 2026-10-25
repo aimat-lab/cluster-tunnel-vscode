@@ -122,6 +122,9 @@ export class JobsPanel {
       services.data.onDidChange(() => this.post()),
       services.hiddenProjects.onDidChange(() => this.post()),
       services.addOns.onDidChange(() => this.reloadAddOnLines()),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration("workbench.reduceMotion")) this.post();
+      }),
     );
     services.data.since = effectiveSince(this.filters);
     this.followVisibility();
@@ -503,6 +506,8 @@ export class JobsPanel {
       refreshing: this.refreshing,
       error: this.services.data.error?.message,
       reveal: this.reveal,
+      // VS Code's own motion setting: "on", "off", or "auto" to follow the system.
+      reduceMotion: vscode.workspace.getConfiguration("workbench").get<string>("reduceMotion", "auto"),
     });
   }
 

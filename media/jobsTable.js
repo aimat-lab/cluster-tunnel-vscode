@@ -28,6 +28,8 @@
   let resize;
   /** Where the column menu is open, in viewport px; undefined while it is closed. */
   let columnMenuAt;
+  /** The last `workbench.reduceMotion` the extension sent. */
+  let reduceMotion = "auto";
   /** Row keys whose commit list is open; kept here so a re-render does not close it. */
   const openCommitLists = new Set();
   /** The serial of the last reveal request the table scrolled to. */
@@ -400,9 +402,11 @@
     }
   }
 
+  /** VS Code's `workbench.reduceMotion`: "on" and "off" decide, "auto" follows the system. */
   function prefersReducedMotion() {
-    const systemReduces = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    return systemReduces || document.body.classList.contains("vscode-reduce-motion");
+    if (reduceMotion === "on") return true;
+    if (reduceMotion === "off") return false;
+    return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
   const DRAG_IMAGE_ROWS = 3;
@@ -762,6 +766,7 @@
 
   function render(message) {
     model = message.model;
+    reduceMotion = message.reduceMotion ?? "auto";
     shownRows = model.groups.flatMap((band) => band.rows);
     const focusedKey = /** @type {HTMLElement | null} */ (document.activeElement)?.dataset?.key;
     app.style.setProperty("--indent-step", `${INDENT_STEP}px`);

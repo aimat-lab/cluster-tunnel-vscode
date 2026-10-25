@@ -53,7 +53,8 @@ straight to ctun's stdin.
   - **Edits**: each `ctun jobs edit` of the record, with time and machine.
 
   Ctrl-click (Cmd-click on macOS) selects a row. Shift-click selects every row
-  from the last one clicked and closes their details. Drag the selection onto a
+  from the last one clicked and closes their details. Drag a row, or the
+  selection by one of its rows, onto a
   project in the Projects view, or onto a project band in the table, to move it
   there. To drop on a project that has no jobs yet, make it first with the
   **New Project…** button in the Projects view's title bar: it goes into the

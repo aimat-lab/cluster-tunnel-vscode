@@ -144,11 +144,11 @@
     });
   }
 
-  /** A selected row drags the whole selection, shown as a stack of cards under the cursor. */
-  function dragSelection(tr) {
+  /** A selected row drags the whole selection, any other row only itself; shown as a stack of cards under the cursor. */
+  function dragJobs(tr, row) {
     tr.draggable = true;
     tr.addEventListener("dragstart", (event) => {
-      const selected = shownRows.filter((row) => row.selected);
+      const selected = row.selected ? shownRows.filter((shown) => shown.selected) : [row];
       const keys = JSON.stringify(selected.map((row) => row.key));
       event.dataTransfer.setData(JOBS_DRAG_MIME, keys);
       event.dataTransfer.setData("text/plain", keys);
@@ -175,9 +175,9 @@
   }
 
   /**
-   * A job's row. A click or Enter/Space opens or closes its details, unless the click
-   * selected text; Ctrl-click (Cmd on macOS) and Shift-click select rows, and a selected
-   * row drags the selection. A right-click opens VS Code's context menu for the row.
+   * A job's row. A click or Enter/Space opens or closes its details; Ctrl-click (Cmd on
+   * macOS) and Shift-click select rows. A row drags itself, or the selection if it is in
+   * it. A right-click opens VS Code's context menu for the row.
    */
   function jobRow(row, depth) {
     const tr = el("tr", ["job", row.expanded && "expanded", row.selected && "selected"].filter(Boolean).join(" "));
@@ -188,7 +188,7 @@
     tr.setAttribute("aria-expanded", String(row.expanded));
     tr.setAttribute("aria-selected", String(row.selected));
     tr.title = row.expanded ? "Hide details" : "Show details";
-    if (row.selected) dragSelection(tr);
+    dragJobs(tr, row);
     const toggle = () => vscode.postMessage({ type: "expand", key: row.key });
     // A Shift-click would otherwise select the text between the two clicks.
     tr.addEventListener("mousedown", (event) => {

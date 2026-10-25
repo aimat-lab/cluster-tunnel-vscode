@@ -112,10 +112,10 @@ test("Ctrl- and Shift-click select rows; the bar moves or clears them", () => {
   assert.strictEqual(render(model()).app.querySelector(".selection-bar"), null);
 });
 
-test("only selected rows drag, and a project band takes the dropped jobs", () => {
+test("a selected row drags the selection, another row only itself, and a project band takes the dropped jobs", () => {
   const { app, sent } = render(model({ selected: ["haicore/101", "haicore/102"] }));
   const row = (key: string) => [...app.querySelectorAll<HTMLElement>("tr.job")].find((node) => node.dataset.rowKey === key)!;
-  assert.deepStrictEqual([row("haicore/101").draggable, row("haicore/103").draggable], [true, false]);
+  assert.deepStrictEqual([row("haicore/101").draggable, row("haicore/103").draggable], [true, true]);
 
   const window = app.ownerDocument.defaultView!;
   const carried = new Map<string, string>();
@@ -127,6 +127,8 @@ test("only selected rows drag, and a project band takes the dropped jobs", () =>
     setDragImage: () => {},
   };
   const dragEvent = (type: string) => Object.assign(new window.Event(type, { bubbles: true, cancelable: true }), { dataTransfer });
+  row("haicore/103").dispatchEvent(dragEvent("dragstart"));
+  assert.deepStrictEqual(JSON.parse(carried.get("application/vnd.ctun.jobs")!), ["haicore/103"]);
   row("haicore/101").dispatchEvent(dragEvent("dragstart"));
   assert.deepStrictEqual(JSON.parse(carried.get("application/vnd.ctun.jobs")!), ["haicore/101", "haicore/102"]);
 

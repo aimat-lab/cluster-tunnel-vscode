@@ -41,7 +41,6 @@ export function activate(context: vscode.ExtensionContext): void {
     data,
     hiddenProjects,
     draftProjects,
-    async (keys, project) => JobsPanel.open?.moveJobs(keys, project),
     (project, renamed) => renameProject(renameServices, project, renamed),
   );
   const projectsView = vscode.window.createTreeView("ctun.projects", {

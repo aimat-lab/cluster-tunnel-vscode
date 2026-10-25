@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import type { ClusterData } from "./clusterData";
 import type { DraftProjects } from "./draftProjects";
 import type { HiddenProjects } from "./hiddenProjects";
-import { allTimeProjectCounts, bandLabel, jobKeysIn, projectLabel, sortProjects, UNASSIGNED } from "./jobsTable";
+import { allTimeProjectCounts, bandLabel, projectLabel, sortProjects, UNASSIGNED } from "./jobsTable";
 import { droppedProject, isHiddenBy, parentProject, totalsWithNested } from "./projectTree";
 
 /** The "All projects" row; `\0` is never part of a project name. */
@@ -14,9 +14,6 @@ export const DRAFT_PROJECT_INFO =
   "Until you drop jobs on it, this draft lives only in VS Code: Settings Sync carries it to your other machines, " +
   "but ctun and agents don't see it. Once a job is in it, it is a normal project. Delete an unused draft with its trash icon.";
 
-/** What the "Cluster jobs" tab puts in a drag of job rows: their row keys as a JSON list. */
-export const JOBS_DRAG_MIME = "application/vnd.ctun.jobs";
-
 /** What a drag of a project in this tree carries: its name. */
 const PROJECT_DRAG_MIME = "application/vnd.ctun.project";
 
@@ -26,21 +23,20 @@ const PROJECT_DRAG_MIME = "application/vnd.ctun.project";
  * An eye hides a project and everything below it in the job list; a click on a
  * name shows only that project and those below it in the job list; "All projects"
  * shows every project again. Draft projects, made here before any job is in them,
- * show with 0 jobs. Dropping job rows on a project moves them there; dropping a
- * project on another nests it there, and on "All projects" moves it to the top.
+ * show with 0 jobs. Dropping a project on another nests it there, and on "All
+ * projects" moves it to the top. Jobs move in the "Cluster jobs" tab: VS Code
+ * hands no drag from a webview to a tree view.
  */
 export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.TreeDragAndDropController<string> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
-  /** `text/plain` too: a drag from a webview may reach the tree with only that type. */
-  readonly dropMimeTypes = [PROJECT_DRAG_MIME, JOBS_DRAG_MIME, "text/plain"];
+  readonly dropMimeTypes = [PROJECT_DRAG_MIME];
   readonly dragMimeTypes = [PROJECT_DRAG_MIME];
 
   constructor(
     private readonly data: ClusterData,
     private readonly hiddenProjects: HiddenProjects,
     private readonly draftProjects: DraftProjects,
-    private readonly moveJobs: (keys: string[], project: string) => Promise<void>,
     private readonly renameProject: (project: string, renamed: string) => Promise<void>,
   ) {
     data.onDidChange(() => this.changed.fire());
@@ -116,19 +112,12 @@ export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.Tre
     }
   }
 
-  /** A project dropped here is renamed into `target`; job rows dragged from the "Cluster jobs" tab move to it. */
+  /** A project dropped here is renamed into `target`. */
   async handleDrop(target: string | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
     const draggedProject = await dataTransfer.get(PROJECT_DRAG_MIME)?.asString();
     if (draggedProject !== undefined) {
       await this.dropProject(draggedProject, target);
-      return;
     }
-    const dragged = await (dataTransfer.get(JOBS_DRAG_MIME) ?? dataTransfer.get("text/plain"))?.asString();
-    const keys = dragged === undefined ? undefined : jobKeysIn(dragged);
-    if (target === undefined || target === ALL_PROJECTS || keys === undefined) {
-      return;
-    }
-    await this.moveJobs(keys, target);
   }
 
   private async dropProject(project: string, target: string | undefined): Promise<void> {

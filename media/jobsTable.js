@@ -6,10 +6,12 @@
   const vscode = acquireVsCodeApi();
   const app = /** @type {HTMLElement} */ (document.getElementById("app"));
   const COLUMN_COUNT = 6;
-  /** JOBS_DRAG_MIME in src/projectsView.ts: the Projects view accepts drops of this type. */
+  /** What a drag of job rows carries: their row keys as a JSON list. */
   const JOBS_DRAG_MIME = "application/vnd.ctun.jobs";
   /** The rows of the last model, for the drag image. */
   let shownRows = [];
+  /** While jobs are dragged: the page's scroll position before, and the newest model, rendered once the drag ends. */
+  let drag;
   /** Row keys whose commit list is open; kept here so a re-render does not close it. */
   const openCommitLists = new Set();
   /** The serial of the last reveal request the table scrolled to. */
@@ -144,19 +146,33 @@
     });
   }
 
-  /** A selected row drags the whole selection, any other row only itself; shown as a stack of cards under the cursor. */
+  /**
+   * A selected row drags the whole selection, any other row only itself; shown as a stack of cards under the cursor.
+   * While it drags, the table folds into one band per project, so every target is in view.
+   */
   function dragJobs(tr, row) {
     tr.draggable = true;
     tr.addEventListener("dragstart", (event) => {
       const selected = row.selected ? shownRows.filter((shown) => shown.selected) : [row];
-      const keys = JSON.stringify(selected.map((row) => row.key));
-      event.dataTransfer.setData(JOBS_DRAG_MIME, keys);
-      event.dataTransfer.setData("text/plain", keys);
+      event.dataTransfer.setData(JOBS_DRAG_MIME, JSON.stringify(selected.map((row) => row.key)));
       event.dataTransfer.effectAllowed = "move";
       const image = dragImage(selected);
       document.body.append(image);
       event.dataTransfer.setDragImage(image, 16, 16);
-      setTimeout(() => image.remove());
+      drag = { scrollY: window.scrollY, deferredMessage: undefined };
+      // Hiding the dragged row inside dragstart would cancel the drag, so fold just after it.
+      setTimeout(() => {
+        image.remove();
+        app.classList.add("dragging-jobs");
+        app.querySelector(".table-wrapper")?.scrollIntoView({ block: "start" });
+      });
+    });
+    tr.addEventListener("dragend", () => {
+      const { scrollY, deferredMessage } = drag;
+      drag = undefined;
+      app.classList.remove("dragging-jobs");
+      if (deferredMessage) render(deferredMessage);
+      window.scrollTo(0, scrollY);
     });
   }
 
@@ -390,7 +406,7 @@
     for (const column of model.columns) headRow.append(columnHeader(column));
     head.append(headRow);
 
-    const body = el("tbody");
+    const body = el("tbody", "job-rows");
     for (const band of model.groups) {
       body.append(projectBand(band));
       for (const row of band.rows) {
@@ -411,9 +427,23 @@
       body.append(fullWidthRow("notice", text, action));
     }
 
-    tableNode.append(head, body);
+    tableNode.append(head, body, dropTargets(model));
     wrapper.append(tableNode);
     return wrapper;
+  }
+
+  /** One folded band per project, shown in place of the job rows while jobs are dragged. */
+  function dropTargets(model) {
+    const body = el("tbody", "drop-targets");
+    for (const target of model.dropTargets) {
+      const title = el("span", "band-title");
+      title.append(el("span", "chevron"), el("strong", "", target.label));
+      const tr = fullWidthRow(target.depth === 0 ? "group-row top-level" : "group-row", title);
+      tr.style.setProperty("--depth", String(target.depth));
+      acceptJobDrops(tr, target.project);
+      body.append(tr);
+    }
+    return body;
   }
 
   function reviewView(model) {
@@ -458,6 +488,12 @@
   window.addEventListener("message", (event) => {
     const message = event.data;
     if (message.type !== "model") return;
+    // A re-render would replace the dragged row, and its dragend would never come.
+    if (drag) drag.deferredMessage = message;
+    else render(message);
+  });
+
+  function render(message) {
     const model = message.model;
     shownRows = model.groups.flatMap((band) => band.rows);
     const focusedKey = /** @type {HTMLElement | null} */ (document.activeElement)?.dataset?.key;
@@ -467,7 +503,7 @@
     app.setAttribute("aria-busy", String(message.refreshing));
     restoreFocus(focusedKey);
     scrollToRevealed(message.reveal);
-  });
+  }
 
   /** Scrolls to the row another tab asked for, once; waits for a later model while the row is not there yet. */
   function scrollToRevealed(reveal) {

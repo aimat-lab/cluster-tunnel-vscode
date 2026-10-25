@@ -54,9 +54,10 @@ straight to ctun's stdin.
 
   Ctrl-click (Cmd-click on macOS) selects a row. Shift-click selects every row
   from the last one clicked and closes their details. Drag a row, or the
-  selection by one of its rows, onto a
-  project in the Projects view, or onto a project band in the table, to move it
-  there. To drop on a project that has no jobs yet, make it first with the
+  selection by one of its rows: while it drags, the table folds into one band
+  per project, drafts included, and a drop on a band moves the jobs there (VS
+  Code hands no drag from the table to the Projects view). To drop on a project
+  that has no jobs yet, make it first with the
   **New Project…** button in the Projects view's title bar: it goes into the
   selected project, or at the top level. While it has no jobs it is marked
   "draft": ctun stores a job's project in the job's record, so a project without

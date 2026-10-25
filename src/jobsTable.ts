@@ -94,6 +94,8 @@ export interface TableInputs {
   sort: JobsSort;
   /** Projects whose eye is closed in the Projects view; their jobs and those nested below are left out. */
   hiddenProjects: ReadonlySet<string>;
+  /** Every project of all time and every draft: the targets while jobs are dragged. */
+  knownProjects: readonly string[];
 }
 
 /** Everything the webview renders; it has no logic of its own. */
@@ -114,6 +116,8 @@ export interface JobsTableModel {
   reviewCards: ReviewCard[];
   /** Selected rows that are shown; only these are moved. */
   selectedCount: number;
+  /** Every project as a folded band, in tree order: shown in place of the table while jobs are dragged. */
+  dropTargets: { project: string; label: string; depth: number }[];
 }
 
 export interface ProjectBand {
@@ -314,22 +318,16 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
     pendingCount: reviewCards.length,
     reviewCards,
     selectedCount: groups.flatMap((band) => band.rows).filter((row) => row.selected).length,
+    dropTargets: sortProjects(new Set([...inputs.knownProjects, UNASSIGNED])).map((project) => ({
+      project,
+      label: bandLabel(project),
+      depth: project === UNASSIGNED ? 0 : nestingDepth(project),
+    })),
   };
 }
 
 export function rowKey(cluster: string, jobId: string): string {
   return `${cluster}/${jobId}`;
-}
-
-/** The row keys in a drag from the "Cluster jobs" tab; undefined for any other text, e.g. from an editor. */
-export function jobKeysIn(text: string): string[] | undefined {
-  try {
-    const parsed: unknown = JSON.parse(text);
-    const isJobKeys = Array.isArray(parsed) && parsed.length > 0 && parsed.every((key) => typeof key === "string" && key.includes("/"));
-    return isJobKeys ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /** The full path, e.g. `htfm › multihead`. */

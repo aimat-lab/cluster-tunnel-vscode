@@ -14,16 +14,20 @@ function render(model: JobsTableModel) {
   const sent: unknown[] = [];
   // A JSON round trip moves each message out of the jsdom realm, so deepStrictEqual compares plain objects.
   const postMessage = (message: unknown) => sent.push(JSON.parse(JSON.stringify(message)));
-  Object.assign(dom.window, { acquireVsCodeApi: () => ({ postMessage }) });
+  Object.assign(dom.window, { acquireVsCodeApi: () => ({ postMessage }), scrollTo: () => {} });
+  // jsdom does no layout, so it has no scrolling.
+  dom.window.HTMLElement.prototype.scrollIntoView = () => {};
   dom.window.eval(RENDERER);
-  dom.window.dispatchEvent(new dom.window.MessageEvent("message", { data: { type: "model", model, refreshing: false } }));
+  const post = (posted: JobsTableModel) =>
+    dom.window.dispatchEvent(new dom.window.MessageEvent("message", { data: { type: "model", model: posted, refreshing: false } }));
+  post(model);
   const app = dom.window.document.getElementById("app")!;
   const click = (text: string, within: Element = app) => {
     const target = [...within.querySelectorAll("button")].find((node) => node.textContent === text);
     assert.ok(target, `no button "${text}"`);
     target.click();
   };
-  return { app, sent, click };
+  return { app, sent, click, post };
 }
 
 function model(
@@ -48,6 +52,7 @@ function model(
     extras: overrides.extras ?? new Map(),
     collapsedProjects: new Set(overrides.collapsed ?? []),
     hiddenProjects: new Set(),
+    knownProjects: ["htfm", "htfm/draft", "legacy"],
     sort: overrides.sort ?? DEFAULT_SORT,
   });
 }
@@ -138,6 +143,28 @@ test("a selected row drags the selection, another row only itself, and a project
   assert.ok(dragover.defaultPrevented);
   legacyBand.dispatchEvent(dragEvent("drop"));
   assert.deepStrictEqual(sent.at(-1), { type: "dropOnProject", keys: ["haicore/101", "haicore/102"], project: "legacy" });
+});
+
+test("a drag folds the table into one band per known project and unfolds it after", async () => {
+  const { app, post } = render(model());
+  const window = app.ownerDocument.defaultView!;
+  const dataTransfer = { types: [], effectAllowed: "", setData: () => {}, getData: () => "", setDragImage: () => {} };
+  const dragEvent = (type: string) => Object.assign(new window.Event(type, { bubbles: true }), { dataTransfer });
+  const row = app.querySelector<HTMLElement>("tr.job")!;
+  const targets = () => [...app.querySelectorAll(".drop-targets .group-row")].map((band) => band.textContent);
+
+  row.dispatchEvent(dragEvent("dragstart"));
+  await new Promise((resolve) => setTimeout(resolve));
+  assert.ok(app.classList.contains("dragging-jobs"));
+  assert.deepStrictEqual(targets(), ["htfm", "draft", "legacy", "Unassigned"]);
+
+  const sortedColumn = () => app.querySelector("th[aria-sort]")?.textContent;
+  const sortedBefore = sortedColumn();
+  post(model({ sort: { column: "state", direction: "descending" } }));
+  assert.strictEqual(sortedColumn(), sortedBefore, "a model during the drag waits for its end");
+  row.dispatchEvent(dragEvent("dragend"));
+  assert.ok(!app.classList.contains("dragging-jobs"));
+  assert.match(sortedColumn() ?? "", /^State/);
 });
 
 test("a column header sorts by its column and shows the direction", () => {

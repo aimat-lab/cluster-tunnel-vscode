@@ -273,7 +273,7 @@ export class JobsPanel {
   }
 
   /** Moves the jobs `keys` to `project` (`UNASSIGNED` clears it); the selection is cleared once they moved. */
-  async moveJobs(keys: readonly string[], project: string): Promise<void> {
+  private async moveJobs(keys: readonly string[], project: string): Promise<void> {
     const jobs = this.jobsOf(keys);
     if (jobs.length === 0) {
       return;
@@ -464,6 +464,7 @@ export class JobsPanel {
       collapsedProjects: this.collapsedProjects,
       sort: this.sort,
       hiddenProjects: this.services.hiddenProjects.all(),
+      knownProjects: this.services.knownProjects(),
     });
   }
 

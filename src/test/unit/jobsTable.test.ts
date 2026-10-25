@@ -11,7 +11,6 @@ import {
   JobRow,
   JobsFilters,
   JobsSort,
-  jobKeysIn,
   noteReferences,
   pendingReviews,
   RowExtras,
@@ -37,6 +36,7 @@ function table(overrides: Partial<Omit<TableInputs, "filters">> & { filters?: Pa
     collapsedProjects: new Set(),
     sort: DEFAULT_SORT,
     hiddenProjects: new Set(),
+    knownProjects: [],
     ...rest,
     filters: { ...DEFAULT_FILTERS, ...filters },
   });
@@ -344,11 +344,14 @@ test("add-ons see every listed and recorded job with its Slurm cluster", () => {
   assert.ok(jobRefs(JOBS_REPORT).every((job) => job.slurmCluster === null));
 });
 
-test("reads the job keys of a drag and ignores other text", () => {
-  assert.deepStrictEqual(jobKeysIn('["haicore/101","haicore/102"]'), ["haicore/101", "haicore/102"]);
-  assert.strictEqual(jobKeysIn("const x = 1;"), undefined);
-  assert.strictEqual(jobKeysIn('["no slash"]'), undefined);
-  assert.strictEqual(jobKeysIn("[]"), undefined);
+test("every known project is a drop target in tree order, with Unassigned last", () => {
+  const { dropTargets } = table({ knownProjects: ["zeta", "htfm/multihead", "htfm"] });
+  assert.deepStrictEqual(dropTargets, [
+    { project: "htfm", label: "htfm", depth: 0 },
+    { project: "htfm/multihead", label: "multihead", depth: 1 },
+    { project: "zeta", label: "zeta", depth: 0 },
+    { project: UNASSIGNED, label: "Unassigned", depth: 0 },
+  ]);
 });
 
 test("the Projects view counts named projects of all time and Unassigned in the window", () => {

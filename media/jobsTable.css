@@ -215,6 +215,16 @@ button:disabled { cursor: default; opacity: 0.6; }
 .job:hover { background: var(--hover); }
 .job.expanded { background: var(--hover); border-bottom-color: transparent; }
 .job.selected { background: var(--selected); }
+/* One frame around each run of selected rows: what a drag of one of them takes along. Inset
+   shadows draw it without shifting the layout; a row inside a run leaves out its top or bottom. */
+.job.selected {
+  --frame: var(--vscode-foreground);
+  --frame-top: var(--frame);
+  --frame-bottom: var(--frame);
+  box-shadow: inset 1px 0 0 var(--frame), inset -1px 0 0 var(--frame), inset 0 1px 0 var(--frame-top), inset 0 -1px 0 var(--frame-bottom);
+}
+.job.selected + .job.selected { --frame-top: transparent; }
+.job.selected:has(+ .job.selected) { --frame-bottom: transparent; }
 .cell { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; height: 100%; padding: 0 var(--cell-padding); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cell-id { padding-left: calc(var(--cell-padding) + (var(--depth, 0) + 1) * var(--indent-step)); }
 .cell-name, .cell-note { display: block; line-height: var(--row-height); }

@@ -4,6 +4,7 @@ import { registerWandbAddOn } from "./addons/wandb";
 import { ClusterData } from "./clusterData";
 import { CLUSTERS_VIEW_ID, ClusterNode, ClustersView } from "./clustersView";
 import { loadChanges } from "./codeChanges";
+import { ColumnLayoutStore } from "./columnLayout";
 import { CommandsPanel, CommandsPanelServices } from "./commandsPanel";
 import { Ctun } from "./ctun";
 import { JobsPanel, JobsPanelServices } from "./jobsPanel";
@@ -64,6 +65,7 @@ export function activate(context: vscode.ExtensionContext): void {
     addOns,
     ctun: createCtun,
     knownProjects: () => projectTree.knownProjects(),
+    columnLayout: new ColumnLayoutStore(context.globalState),
     loadChanges: (cluster, workdir, fromCommit, toCommit) => loadChanges(createCtun(), cluster, workdir, fromCommit, toCommit),
   };
   const showJobs = () => JobsPanel.show(context.extensionUri, services);

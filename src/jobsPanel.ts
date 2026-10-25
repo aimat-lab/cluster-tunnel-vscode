@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import type { AddOnRegistry } from "./addOnRegistry";
 import { DetailLine, JobRef, jobRefs } from "./addOns";
 import type { ClusterData } from "./clusterData";
+import { ColumnLayout, ColumnLayoutStore, DEFAULT_COLUMN_LAYOUT, moveColumn, setColumnWidth, toggleColumn } from "./columnLayout";
 import { Ctun, CtunError, JobEdit } from "./ctun";
 import {
   ALL_CLUSTERS,
@@ -36,6 +37,7 @@ export interface JobsPanelServices {
   ctun: () => Ctun;
   /** Every project of all time and every draft, for Move to Project. */
   knownProjects: () => string[];
+  columnLayout: ColumnLayoutStore;
   loadChanges: (cluster: string, workdir: string, fromCommit: string, toCommit: string) => Promise<ChangesState>;
 }
 
@@ -57,6 +59,10 @@ type WebviewMessage =
   | { type: "setMode"; mode: JobsTableModel["mode"] }
   | { type: "review"; key: string; action: "confirm" | "edit" | "discard" }
   | { type: "customizeNoteWriting" }
+  | { type: "setColumnWidth"; column: ColumnId; width: number }
+  | { type: "moveColumn"; column: ColumnId; target: ColumnId }
+  | { type: "toggleColumn"; column: ColumnId }
+  | { type: "resetColumns" }
   | { type: "loadChanges"; key: string }
   | { type: "showJob"; key: string }
   | { type: "openUrl"; url: string }
@@ -204,6 +210,18 @@ export class JobsPanel {
       case "customizeNoteWriting":
         await vscode.commands.executeCommand("ctun.customizeNoteWriting");
         return;
+      case "setColumnWidth":
+        await this.setColumnLayout(setColumnWidth(this.services.columnLayout.get(), message.column, message.width));
+        return;
+      case "moveColumn":
+        await this.setColumnLayout(moveColumn(this.services.columnLayout.get(), message.column, message.target));
+        return;
+      case "toggleColumn":
+        await this.setColumnLayout(toggleColumn(this.services.columnLayout.get(), message.column));
+        return;
+      case "resetColumns":
+        await this.setColumnLayout(DEFAULT_COLUMN_LAYOUT);
+        return;
       case "loadChanges":
         await this.loadChanges(message.key);
         return;
@@ -221,6 +239,11 @@ export class JobsPanel {
         }
         return;
     }
+  }
+
+  private async setColumnLayout(layout: ColumnLayout): Promise<void> {
+    await this.services.columnLayout.set(layout);
+    this.post();
   }
 
   /** Applies new filters; refetches only when the window ctun needs changed. */
@@ -469,6 +492,7 @@ export class JobsPanel {
       sort: this.sort,
       hiddenProjects: this.services.hiddenProjects.all(),
       knownProjects: this.services.knownProjects(),
+      columnLayout: this.services.columnLayout.get(),
     });
   }
 

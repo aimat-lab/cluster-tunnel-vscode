@@ -4,6 +4,7 @@ import * as path from "path";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { buildJobsTable, DEFAULT_FILTERS, DEFAULT_SORT, JobsSort, JobsTableModel, RowExtras } from "../../jobsTable";
+import { ColumnLayout, DEFAULT_COLUMN_LAYOUT } from "../../columnLayout";
 import { GUARDED_STATUS, JOBS_REPORT, LOGGED_OUT_STATUS } from "../fixtures/ctunOutput";
 
 const RENDERER = fs.readFileSync(path.resolve(__dirname, "../../../media/jobsTable.js"), "utf8");
@@ -38,6 +39,7 @@ function model(
     collapsed?: string[];
     sort?: JobsSort;
     selected?: string[];
+    columnLayout?: ColumnLayout;
   } = {},
 ) {
   return buildJobsTable({
@@ -53,6 +55,7 @@ function model(
     collapsedProjects: new Set(overrides.collapsed ?? []),
     hiddenProjects: new Set(),
     knownProjects: ["htfm", "htfm/draft", "legacy"],
+    columnLayout: overrides.columnLayout ?? DEFAULT_COLUMN_LAYOUT,
     sort: overrides.sort ?? DEFAULT_SORT,
   });
 }
@@ -66,12 +69,12 @@ test("renders project groups, notes and the locked cluster", () => {
   assert.match(text, /Rerun of job:91/);
   assert.doesNotMatch(text, /unreviewed/i);
   assert.match(text, /bwuni3 has no tunnel/);
-  assert.match(text, /To review · 3/);
+  assert.match(text, /3 notes to review/);
 });
 
 test("a folded project band hides its jobs and asks the extension to unfold", () => {
   const { app, sent } = render(model({ collapsed: ["htfm"] }));
-  const shownJobs = [...app.querySelectorAll<HTMLElement>("tr.job")].map((row) => row.dataset.rowKey);
+  const shownJobs = [...app.querySelectorAll<HTMLElement>(".job")].map((row) => row.dataset.rowKey);
   assert.ok(!shownJobs.includes("haicore/101"));
   const unfold = app.querySelector<HTMLButtonElement>('[aria-label="Unfold htfm"]')!;
   assert.strictEqual(unfold.getAttribute("aria-expanded"), "false");
@@ -81,7 +84,7 @@ test("a folded project band hides its jobs and asks the extension to unfold", ()
 
 test("a click on a job row or Enter on it toggles its details", () => {
   const { app, sent } = render(model({ expanded: ["haicore/101"] }));
-  const row = (key: string) => [...app.querySelectorAll<HTMLElement>("tr.job")].find((node) => node.dataset.rowKey === key)!;
+  const row = (key: string) => [...app.querySelectorAll<HTMLElement>(".job")].find((node) => node.dataset.rowKey === key)!;
   assert.strictEqual(row("haicore/101").getAttribute("aria-expanded"), "true");
   row("haicore/102").click();
   row("haicore/101").dispatchEvent(new app.ownerDocument.defaultView!.KeyboardEvent("keydown", { key: "Enter" }));
@@ -89,12 +92,12 @@ test("a click on a job row or Enter on it toggles its details", () => {
     { type: "expand", key: "haicore/102" },
     { type: "expand", key: "haicore/101" },
   ]);
-  assert.strictEqual(app.querySelectorAll("button.icon-button").length, 0);
+  assert.strictEqual(app.querySelectorAll(".job button").length, 0);
 });
 
 test("Ctrl- and Shift-click select rows; the bar moves or clears them", () => {
   const { app, sent, click } = render(model({ selected: ["haicore/101", "haicore/102"] }));
-  const row = (key: string) => [...app.querySelectorAll<HTMLElement>("tr.job")].find((node) => node.dataset.rowKey === key)!;
+  const row = (key: string) => [...app.querySelectorAll<HTMLElement>(".job")].find((node) => node.dataset.rowKey === key)!;
   const MouseEvent = app.ownerDocument.defaultView!.MouseEvent;
   row("haicore/103").dispatchEvent(new MouseEvent("click", { ctrlKey: true, bubbles: true }));
   row("haicore/90").dispatchEvent(new MouseEvent("click", { shiftKey: true, bubbles: true }));
@@ -119,7 +122,7 @@ test("Ctrl- and Shift-click select rows; the bar moves or clears them", () => {
 
 test("a selected row drags the selection, another row only itself, and a project band takes the dropped jobs", () => {
   const { app, sent } = render(model({ selected: ["haicore/101", "haicore/102"] }));
-  const row = (key: string) => [...app.querySelectorAll<HTMLElement>("tr.job")].find((node) => node.dataset.rowKey === key)!;
+  const row = (key: string) => [...app.querySelectorAll<HTMLElement>(".job")].find((node) => node.dataset.rowKey === key)!;
   assert.deepStrictEqual([row("haicore/101").draggable, row("haicore/103").draggable], [true, true]);
 
   const window = app.ownerDocument.defaultView!;
@@ -150,7 +153,7 @@ test("a drag folds the table into one band per known project and unfolds it afte
   const window = app.ownerDocument.defaultView!;
   const dataTransfer = { types: [], effectAllowed: "", setData: () => {}, getData: () => "", setDragImage: () => {} };
   const dragEvent = (type: string) => Object.assign(new window.Event(type, { bubbles: true }), { dataTransfer });
-  const row = app.querySelector<HTMLElement>("tr.job")!;
+  const row = app.querySelector<HTMLElement>(".job")!;
   const targets = () => [...app.querySelectorAll(".drop-targets .group-row")].map((band) => band.textContent);
 
   row.dispatchEvent(dragEvent("dragstart"));
@@ -158,7 +161,7 @@ test("a drag folds the table into one band per known project and unfolds it afte
   assert.ok(app.classList.contains("dragging-jobs"));
   assert.deepStrictEqual(targets(), ["htfm", "draft", "legacy", "Unassigned"]);
 
-  const sortedColumn = () => app.querySelector("th[aria-sort]")?.textContent;
+  const sortedColumn = () => app.querySelector("[role=columnheader][aria-sort]")?.textContent;
   const sortedBefore = sortedColumn();
   post(model({ sort: { column: "state", direction: "descending" } }));
   assert.strictEqual(sortedColumn(), sortedBefore, "a model during the drag waits for its end");
@@ -169,10 +172,10 @@ test("a drag folds the table into one band per known project and unfolds it afte
 
 test("a column header sorts by its column and shows the direction", () => {
   const { app, sent, click } = render(model({ sort: { column: "state", direction: "descending" } }));
-  const sortedHeader = app.querySelector("th[aria-sort]")!;
+  const sortedHeader = app.querySelector("[role=columnheader][aria-sort]")!;
   assert.strictEqual(sortedHeader.getAttribute("aria-sort"), "descending");
   assert.strictEqual(sortedHeader.textContent, "State↓");
-  click("Partition · nodes");
+  click("Partition");
   assert.deepStrictEqual(sent.at(-1), { type: "sort", column: "partition" });
 });
 
@@ -194,7 +197,7 @@ test("renders the details of an expanded job and sends its actions", () => {
   assert.strictEqual(details.length, 2);
 
   const first = details[0].textContent ?? "";
-  assert.match(first, /Unreviewed draft/);
+  assert.match(first, /Draft by the agent/);
   assert.match(first, /epoch 31 · val\/loss 0.690/);
   assert.match(first, /87d86d4 on main · pushed/);
   assert.match(first, /Previous run: job 91 on haicore \(Failed\)/);
@@ -267,4 +270,44 @@ test("scrolls once to the row another tab revealed", () => {
   post({ key: "haicore/94", serial: 1 });
   post({ key: "haicore/94", serial: 2 });
   assert.deepStrictEqual(scrolled, ["haicore/94", "haicore/94"]);
+});
+
+test("the columns follow the layout, and their headers resize, move and hide them", () => {
+  const layout = { ...DEFAULT_COLUMN_LAYOUT, hidden: ["note" as const] };
+  const { app, sent } = render(model({ columnLayout: layout }));
+  const window = app.ownerDocument.defaultView!;
+  const headers = () => [...app.querySelectorAll<HTMLElement>("[role=columnheader]")];
+  assert.deepStrictEqual(headers().map((header) => header.dataset.column), ["id", "name", "state", "start", "elapsed", "partition"]);
+  const grid = app.querySelector<HTMLElement>(".grid")!;
+  assert.match(grid.style.getPropertyValue("--columns"), /minmax\(0, 1fr\)$/, "without Note an empty track takes the rest");
+  const job = app.querySelector(".job")!;
+  assert.strictEqual(job.children.length, 7, "six cells and the empty one");
+
+  const state = headers().find((header) => header.dataset.column === "state")!;
+  const handle = state.querySelector<HTMLElement>(".resize-handle")!;
+  Object.assign(handle, { setPointerCapture: () => {} });
+  const pointer = (type: string, clientX: number) => Object.assign(new window.Event(type, { bubbles: true }), { clientX, pointerId: 1 });
+  handle.dispatchEvent(pointer("pointerdown", 100));
+  handle.dispatchEvent(pointer("pointermove", 140));
+  assert.match(grid.style.getPropertyValue("--columns"), / 160px /, "the width follows the drag before it is stored");
+  handle.dispatchEvent(pointer("pointerup", 140));
+  assert.deepStrictEqual(sent.at(-1), { type: "setColumnWidth", column: "state", width: 160 });
+
+  const carried = new Map<string, string>([["application/vnd.ctun.column", "partition"]]);
+  const dataTransfer = { types: [...carried.keys()], getData: (type: string) => carried.get(type) ?? "" };
+  const dragEvent = (type: string) => Object.assign(new window.Event(type, { bubbles: true, cancelable: true }), { dataTransfer, clientX: 0 });
+  const name = headers().find((header) => header.dataset.column === "name")!;
+  const over = dragEvent("dragover");
+  name.dispatchEvent(over);
+  assert.ok(over.defaultPrevented);
+  name.dispatchEvent(dragEvent("drop"));
+  assert.deepStrictEqual(sent.at(-1), { type: "moveColumn", column: "partition", target: "name" });
+
+  state.dispatchEvent(Object.assign(new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }), {}));
+  const menu = app.ownerDocument.querySelector(".column-menu")!;
+  const noteBox = [...menu.querySelectorAll("label")].find((label) => label.textContent === "Note")!.querySelector("input")!;
+  assert.strictEqual(noteBox.checked, false);
+  noteBox.dispatchEvent(new window.Event("change"));
+  assert.deepStrictEqual(sent.at(-1), { type: "toggleColumn", column: "note" });
+  assert.strictEqual([...menu.querySelectorAll("label")].find((label) => label.textContent?.startsWith("ID"))!.querySelector("input")!.disabled, true);
 });

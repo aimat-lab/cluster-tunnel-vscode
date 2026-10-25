@@ -18,6 +18,7 @@ import {
   TableInputs,
   UNASSIGNED,
 } from "../../jobsTable";
+import { DEFAULT_COLUMN_LAYOUT } from "../../columnLayout";
 import { GUARDED_STATUS, JOBS, JOBS_REPORT, LOGGED_OUT_STATUS, recordWithoutFacts, reportWith } from "../fixtures/ctunOutput";
 
 const STATUSES = [LOGGED_OUT_STATUS, GUARDED_STATUS];
@@ -37,6 +38,7 @@ function table(overrides: Partial<Omit<TableInputs, "filters">> & { filters?: Pa
     sort: DEFAULT_SORT,
     hiddenProjects: new Set(),
     knownProjects: [],
+    columnLayout: DEFAULT_COLUMN_LAYOUT,
     ...rest,
     filters: { ...DEFAULT_FILTERS, ...filters },
   });
@@ -129,7 +131,7 @@ test("a sorted column orders the jobs inside each band and marks its header", ()
   const model = table({ sort: { column: "elapsed", direction: "descending" } });
   assert.deepStrictEqual(
     model.columns.map((column) => [column.id, column.sort]),
-    [["id", undefined], ["name", undefined], ["state", undefined], ["start", undefined], ["elapsed", "descending"], ["partition", undefined]],
+    [["id", undefined], ["name", undefined], ["note", undefined], ["state", undefined], ["start", undefined], ["elapsed", "descending"], ["partition", undefined]],
   );
 });
 

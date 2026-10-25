@@ -1,5 +1,6 @@
 import type { DetailLine } from "./addOns";
 import type { ClusterJobsEntry, ClusterStatus, Job, JobRecord, JobsReport, ProjectsReport, RecordChange } from "./ctun";
+import { ColumnId, ColumnLayout, columnLabel, columnWidth, PINNED_COLUMN, shownColumns } from "./columnLayout";
 import { baseState, STATE_GROUPS, StateGroupId, stateGroup } from "./jobStates";
 import {
   isHiddenBy,
@@ -22,17 +23,8 @@ export const SINCE_OPTIONS = [
   { value: ALL_TIME_SINCE, label: "All time (refresh by hand)" },
 ] as const;
 
-/** The table's columns; each sorts its jobs by what it shows. */
-export const COLUMNS = [
-  { id: "id", label: "Cluster · ID" },
-  { id: "name", label: "Job · note" },
-  { id: "state", label: "State" },
-  { id: "start", label: "Start" },
-  { id: "elapsed", label: "Elapsed / limit" },
-  { id: "partition", label: "Partition · nodes" },
-] as const;
-
-export type ColumnId = (typeof COLUMNS)[number]["id"];
+export { COLUMNS } from "./columnLayout";
+export type { ColumnId } from "./columnLayout";
 export type SortDirection = "ascending" | "descending";
 /** The column the jobs are sorted by. */
 export type JobsSort = { column: ColumnId; direction: SortDirection };
@@ -96,12 +88,16 @@ export interface TableInputs {
   hiddenProjects: ReadonlySet<string>;
   /** Every project of all time and every draft: the targets while jobs are dragged. */
   knownProjects: readonly string[];
+  columnLayout: ColumnLayout;
 }
 
 /** Everything the webview renders; it has no logic of its own. */
 export interface JobsTableModel {
   mode: "jobs" | "review";
-  columns: { id: ColumnId; label: string; sort: SortDirection | undefined }[];
+  /** The shown columns in their order; `width` is undefined for the one that takes the rest. */
+  columns: { id: ColumnId; label: string; sort: SortDirection | undefined; width: number | undefined; pinned: boolean }[];
+  /** Every column in its order, for the menu that shows and hides them. */
+  columnMenu: { id: ColumnId; label: string; shown: boolean; pinned: boolean }[];
   toggles: { id: StateGroupId; label: string; count: number; pressed: boolean }[];
   since: string;
   sinceOptions: typeof SINCE_OPTIONS;
@@ -151,7 +147,8 @@ export interface JobRow {
   /** The Slurm state as ctun printed it, e.g. `CANCELLED by 504768`. */
   state: string;
   group: StateGroupId | undefined;
-  timeText: string;
+  elapsedText: string;
+  limitText: string;
   /** Elapsed share of the time limit, 0–1; undefined for an unlimited or unreadable limit. */
   progress: number | undefined;
   /** When the job started, e.g. `Oct 14, 01:53 PM`; `est. …` while queued; undefined when unknown. */
@@ -293,9 +290,18 @@ export function buildJobsTable(inputs: TableInputs): JobsTableModel {
 
   return {
     mode: inputs.mode,
-    columns: COLUMNS.map((column) => ({
-      ...column,
+    columns: shownColumns(inputs.columnLayout).map((column) => ({
+      id: column.id,
+      label: column.label,
       sort: inputs.sort.column === column.id ? inputs.sort.direction : undefined,
+      width: columnWidth(inputs.columnLayout, column.id),
+      pinned: column.id === PINNED_COLUMN,
+    })),
+    columnMenu: inputs.columnLayout.order.map((id) => ({
+      id,
+      label: columnLabel(id),
+      shown: !inputs.columnLayout.hidden.includes(id),
+      pinned: id === PINNED_COLUMN,
     })),
     toggles: STATE_GROUPS.map((group) => ({
       id: group.id,
@@ -358,6 +364,7 @@ function allRecords(report: JobsReport | undefined): ClusterRecord[] {
 const COMPARE_BY_COLUMN: Record<ColumnId, (a: LiveJob, b: LiveJob) => number> = {
   id: (a, b) => naturalCompare(rowKey(a.entry.cluster, a.job.jobid), rowKey(b.entry.cluster, b.job.jobid)),
   name: (a, b) => naturalCompare(a.job.name, b.job.name),
+  note: (a, b) => naturalCompare(a.job.record?.note ?? "", b.job.record?.note ?? ""),
   state: (a, b) => stateRank(a.job) - stateRank(b.job) || naturalCompare(stateLabel(a.job), stateLabel(b.job)),
   start: (a, b) => compareNumbers(startEpoch(a.job), startEpoch(b.job)),
   elapsed: (a, b) => (slurmDurationSeconds(a.job.elapsed) ?? -1) - (slurmDurationSeconds(b.job.elapsed) ?? -1),
@@ -434,7 +441,8 @@ function toRow(cluster: string, job: Job, inputs: TableInputs, records: ClusterR
     stateLabel: stateLabel(job),
     state: job.state,
     group,
-    timeText: `${job.elapsed} / ${job.timelimit}`,
+    elapsedText: job.elapsed,
+    limitText: job.timelimit,
     progress:
       limitSeconds && elapsedSeconds !== undefined ? Math.min(1, elapsedSeconds / limitSeconds) : undefined,
     startText: startText(job, group),

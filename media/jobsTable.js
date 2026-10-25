@@ -5,13 +5,25 @@
   // eslint-disable-next-line no-undef
   const vscode = acquireVsCodeApi();
   const app = /** @type {HTMLElement} */ (document.getElementById("app"));
-  const COLUMN_COUNT = 6;
   /** What a drag of job rows carries: their row keys as a JSON list. */
   const JOBS_DRAG_MIME = "application/vnd.ctun.jobs";
+  /** What a drag of a column header carries: the column's id. */
+  const COLUMN_DRAG_MIME = "application/vnd.ctun.column";
+  /** Pixels a nesting level indents a band's name and a job's ID. */
+  const INDENT_STEP = 16;
+  const MIN_COLUMN_WIDTH = 60;
+  /** The width Note keeps however narrow the tab gets. */
+  const FLEXIBLE_MIN_WIDTH = 160;
+  /** The last model, for the drag image, a live column resize and the column menu. */
+  let model;
   /** The rows of the last model, for the drag image. */
   let shownRows = [];
   /** While jobs are dragged: the page's scroll position before, and the newest model, rendered once the drag ends. */
   let drag;
+  /** While a column divider is dragged: the column, where the drag began and which way widens it. */
+  let resize;
+  /** Where the column menu is open, in viewport px; undefined while it is closed. */
+  let columnMenuAt;
   /** Row keys whose commit list is open; kept here so a re-render does not close it. */
   const openCommitLists = new Set();
   /** The serial of the last reveal request the table scrolled to. */
@@ -34,13 +46,51 @@
     return node;
   }
 
+  /** 16 px stroke icons, drawn in the text color. */
+  const ICON_PATHS = {
+    refresh: "M13 8a5 5 0 1 1-1.5-3.5M13 2.5V5h-2.5",
+    columns: "M2.5 3.5h11v9h-11zM6.2 3.5v9M9.8 3.5v9",
+    chevron: "M6 4l4 4-4 4",
+    completed: "M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM5.3 8.2l1.9 1.9 3.6-3.8",
+    failed: "M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4",
+    running: "M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM6.7 5.6v4.8L10.4 8z",
+    queued: "M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM8 4.8V8l2.2 1.4",
+    cancelled: "M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM3.8 12.2l8.4-8.4",
+    other: "M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2z",
+  };
+
+  function icon(name, className) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("class", className ? `icon ${className}` : "icon");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", ICON_PATHS[name]);
+    svg.append(path);
+    return svg;
+  }
+
+  /** A button showing only `name`'s icon; it posts `message` when given one. */
+  function iconButton(name, label, message) {
+    const node = message ? button("icon-button", undefined, message) : el("button", "icon-button");
+    node.type = "button";
+    node.setAttribute("aria-label", label);
+    node.title = label;
+    node.append(icon(name));
+    return node;
+  }
+
   function select(id, label, options, onChange) {
     const wrapper = el("span", "select-group");
-    const labelNode = el("label", "select-label", label);
-    labelNode.htmlFor = id;
+    if (label) {
+      const labelNode = el("label", "select-label", label);
+      labelNode.htmlFor = id;
+      wrapper.append(labelNode);
+    }
     const node = el("select", "select");
     node.id = id;
     node.dataset.key = id;
+    if (!label) node.setAttribute("aria-label", options.find((option) => option.selected)?.label ?? id);
     for (const option of options) {
       const optionNode = el("option", "", option.label);
       optionNode.value = option.value;
@@ -48,100 +98,237 @@
       node.append(optionNode);
     }
     node.addEventListener("change", () => onChange(node.value));
-    wrapper.append(labelNode, node);
+    wrapper.append(node);
     return wrapper;
   }
 
-  function header(model, refreshing) {
-    const bar = el("div", "header");
-    const titles = el("div");
-    titles.append(
-      el("h1", "", "Cluster jobs"),
-      el(
-        "p",
-        "subtitle",
-        `From squeue and sacct over each open tunnel, with the job records ctun keeps on the cluster. ${model.updatedText}`,
-      ),
-    );
+  /** One row: the title, the state toggles, the window, the cluster, then the review link, the time and the actions. */
+  function toolbar(refreshing) {
+    const bar = el("div", "toolbar");
+    bar.append(el("h1", "", "Cluster jobs"));
 
-    const controls = el("div", "controls");
-    controls.setAttribute("role", "group");
-    controls.setAttribute("aria-label", "Which jobs to show");
+    const toggles = el("div", "toggles");
+    toggles.setAttribute("role", "group");
+    toggles.setAttribute("aria-label", "Which jobs to show");
     for (const toggle of model.toggles) {
-      const node = button("toggle", "", { type: "toggle", group: toggle.id }, toggle.pressed);
-      node.append(el("span", `dot group-${toggle.id}`), `${toggle.label} · ${toggle.count}`);
-      controls.append(node);
+      const node = button(`toggle group-${toggle.id}`, "", { type: "toggle", group: toggle.id }, toggle.pressed);
+      node.append(el("span", "dot"), el("span", "", toggle.label), el("span", "count", String(toggle.count)));
+      toggles.append(node);
     }
-    controls.append(
+    bar.append(toggles, el("span", "separator"));
+    bar.append(
       select(
         "since",
         "Ended in",
         model.sinceOptions.map((option) => ({ ...option, selected: option.value === model.since })),
         (since) => vscode.postMessage({ type: "pickSince", since }),
       ),
+      select(
+        "cluster",
+        undefined,
+        model.chips.map((chip) => ({ value: chip.id, label: chip.label, selected: chip.pressed })),
+        (cluster) => vscode.postMessage({ type: "pickCluster", cluster }),
+      ),
     );
-    const refresh = button("secondary", refreshing ? "Refreshing…" : "Refresh", { type: "refresh" });
-    refresh.disabled = refreshing;
-    controls.append(refresh);
 
-    bar.append(titles, controls);
-    return bar;
-  }
-
-  function filters(model) {
-    const bar = el("div", "filters");
-    const chips = el("div", "chips");
-    chips.setAttribute("role", "group");
-    chips.setAttribute("aria-label", "Filter by cluster");
-    for (const chip of model.chips) {
-      chips.append(button("chip", chip.label, { type: "pickCluster", cluster: chip.id }, chip.pressed));
+    bar.append(el("span", "spacer"));
+    if (model.pendingCount > 0) {
+      const noun = model.pendingCount === 1 ? "note" : "notes";
+      bar.append(button("link-button", `${model.pendingCount} ${noun} to review`, { type: "setMode", mode: "review" }));
     }
-    const right = el("div", "chips");
-    const review = button(
-      model.pendingCount > 0 ? "review-button pending" : "review-button",
-      `To review · ${model.pendingCount}`,
-      { type: "setMode", mode: "review" },
-    );
-    right.append(review);
-    bar.append(chips, right);
+    bar.append(el("span", "muted updated", model.updatedText));
+    const columns = iconButton("columns", "Columns");
+    columns.setAttribute("aria-haspopup", "true");
+    columns.setAttribute("aria-expanded", String(columnMenuAt !== undefined));
+    columns.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const box = columns.getBoundingClientRect();
+      toggleColumnMenu({ x: box.right, y: box.bottom + 4, alignRight: true });
+    });
+    const refresh = iconButton("refresh", refreshing ? "Refreshing…" : "Refresh", { type: "refresh" });
+    refresh.disabled = refreshing;
+    if (refreshing) refresh.classList.add("spinning");
+    bar.append(columns, refresh);
     return bar;
   }
 
-  function stateBadge(group, label, title) {
-    const badge = el("span", `badge group-${group ?? "other"}`);
-    if (title) badge.title = title;
-    badge.append(el("span", "dot"), label);
-    return badge;
+  /** The grid's column tracks: px for each column, the rest for Note, or for an empty last track when Note is hidden. */
+  function columnTemplate(widthOverride) {
+    const tracks = model.columns.map((column) => {
+      if (column.width === undefined) return `minmax(${FLEXIBLE_MIN_WIDTH}px, 1fr)`;
+      const width = widthOverride && widthOverride.id === column.id ? widthOverride.width : column.width;
+      return `${width}px`;
+    });
+    if (!model.columns.some((column) => column.width === undefined)) tracks.push("minmax(0, 1fr)");
+    return tracks.join(" ");
   }
 
-  /** A project's band: fold button, name, job count and, for Unassigned, why. Indented by its depth. */
+  /** True when no column takes the rest, so an empty track fills the row. */
+  function hasSpacer() {
+    return !model.columns.some((column) => column.width === undefined);
+  }
+
+  const SORT_ARROWS = { ascending: "↑", descending: "↓" };
+
+  /**
+   * A column's header: a click sorts by it, its divider drags its width, and the header
+   * itself drags to another place. Left of the column that takes the rest, a column's
+   * right edge drags; right of it, its left edge, so a drag always pushes against Note.
+   */
+  function columnHeader(column, index) {
+    const header = el("div", "th");
+    header.setAttribute("role", "columnheader");
+    header.dataset.column = column.id;
+    if (column.sort) header.setAttribute("aria-sort", column.sort);
+    const sortButton = button("sort-button", column.label, { type: "sort", column: column.id });
+    sortButton.append(el("span", "sort-arrow", column.sort ? SORT_ARROWS[column.sort] : ""));
+    header.append(sortButton);
+
+    if (column.width !== undefined) {
+      const flexibleIndex = model.columns.findIndex((other) => other.width === undefined);
+      const isLeftOfFlexible = flexibleIndex === -1 || index < flexibleIndex;
+      const handle = el("span", isLeftOfFlexible ? "resize-handle right" : "resize-handle left");
+      handle.setAttribute("role", "separator");
+      handle.setAttribute("aria-orientation", "vertical");
+      handle.setAttribute("aria-label", `Resize the ${column.label} column`);
+      handle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        handle.setPointerCapture(event.pointerId);
+        resize = { id: column.id, x: event.clientX, width: column.width, direction: isLeftOfFlexible ? 1 : -1, current: column.width };
+        handle.classList.add("active");
+      });
+      handle.addEventListener("pointermove", (event) => {
+        if (!resize) return;
+        resize.current = Math.max(MIN_COLUMN_WIDTH, Math.round(resize.width + resize.direction * (event.clientX - resize.x)));
+        app.querySelector(".grid")?.style.setProperty("--columns", columnTemplate({ id: resize.id, width: resize.current }));
+      });
+      const endResize = () => {
+        if (!resize) return;
+        const { id, width, current } = resize;
+        resize = undefined;
+        handle.classList.remove("active");
+        if (current !== width) vscode.postMessage({ type: "setColumnWidth", column: id, width: current });
+      };
+      handle.addEventListener("pointerup", endResize);
+      handle.addEventListener("lostpointercapture", endResize);
+      // A click on the divider must not sort.
+      handle.addEventListener("click", (event) => event.stopPropagation());
+      header.append(handle);
+    }
+
+    if (!column.pinned) dragColumn(header, column);
+    acceptColumnDrops(header, column);
+    header.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      toggleColumnMenu({ x: event.clientX, y: event.clientY, alignRight: false });
+    });
+    return header;
+  }
+
+  function dragColumn(header, column) {
+    header.draggable = true;
+    header.addEventListener("dragstart", (event) => {
+      // A drag that began on a divider resizes; it must not also move the column.
+      if (resize) {
+        event.preventDefault();
+        return;
+      }
+      event.dataTransfer.setData(COLUMN_DRAG_MIME, column.id);
+      event.dataTransfer.effectAllowed = "move";
+      header.classList.add("moving");
+    });
+    header.addEventListener("dragend", () => header.classList.remove("moving"));
+  }
+
+  /** A header takes a dragged column: it moves to where this one is. ID stays first. */
+  function acceptColumnDrops(header, column) {
+    const carriesColumn = (event) => !column.pinned && event.dataTransfer?.types.includes(COLUMN_DRAG_MIME);
+    header.addEventListener("dragover", (event) => {
+      if (!carriesColumn(event)) return;
+      event.preventDefault();
+      const box = header.getBoundingClientRect();
+      const isRightHalf = event.clientX > box.left + box.width / 2;
+      header.classList.toggle("drop-after", isRightHalf);
+      header.classList.toggle("drop-before", !isRightHalf);
+    });
+    header.addEventListener("dragleave", () => header.classList.remove("drop-before", "drop-after"));
+    header.addEventListener("drop", (event) => {
+      if (!carriesColumn(event)) return;
+      event.preventDefault();
+      header.classList.remove("drop-before", "drop-after");
+      const moved = event.dataTransfer.getData(COLUMN_DRAG_MIME);
+      if (moved && moved !== column.id) vscode.postMessage({ type: "moveColumn", column: moved, target: column.id });
+    });
+  }
+
+  /** Opens the menu that shows and hides columns at `at`, or closes it when it is open. */
+  function toggleColumnMenu(at) {
+    columnMenuAt = columnMenuAt ? undefined : at;
+    renderColumnMenu();
+  }
+
+  function renderColumnMenu() {
+    document.querySelector(".column-menu")?.remove();
+    app.querySelector('[aria-label="Columns"]')?.setAttribute("aria-expanded", String(columnMenuAt !== undefined));
+    if (!columnMenuAt || !model) return;
+    const menu = el("div", "column-menu");
+    menu.setAttribute("role", "group");
+    menu.setAttribute("aria-label", "Shown columns");
+    menu.style.top = `${columnMenuAt.y}px`;
+    if (columnMenuAt.alignRight) menu.style.right = `${window.innerWidth - columnMenuAt.x}px`;
+    else menu.style.left = `${columnMenuAt.x}px`;
+    menu.append(el("div", "menu-title", "Shown columns"));
+    for (const column of model.columnMenu) {
+      const item = el("label", column.pinned ? "menu-item pinned" : "menu-item");
+      const box = el("input");
+      box.type = "checkbox";
+      box.checked = column.shown;
+      box.disabled = column.pinned;
+      box.addEventListener("change", () => vscode.postMessage({ type: "toggleColumn", column: column.id }));
+      item.append(box, el("span", "", column.label));
+      if (column.pinned) item.append(el("span", "muted", "always"));
+      menu.append(item);
+    }
+    menu.append(el("div", "menu-separator"), button("menu-item menu-button", "Reset columns", { type: "resetColumns" }));
+    menu.addEventListener("mousedown", (event) => event.stopPropagation());
+    menu.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") toggleColumnMenu(undefined);
+    });
+    document.body.append(menu);
+  }
+
+  document.addEventListener("mousedown", () => {
+    if (columnMenuAt) toggleColumnMenu(undefined);
+  });
+
+  /** A project's band: fold button, name, job count and, for Unassigned, why. Its name is indented by its depth. */
   function projectBand(band) {
-    const title = el("span", "band-title");
+    const row = el("div", "group-row");
+    row.setAttribute("role", "row");
+    row.style.setProperty("--depth", String(band.depth));
     const fold = button("fold", undefined, { type: "toggleProject", project: band.project });
-    fold.append(el("span", "chevron"));
+    fold.append(icon("chevron", "chevron"));
     fold.setAttribute("aria-expanded", String(!band.collapsed));
     fold.setAttribute("aria-label", `${band.collapsed ? "Unfold" : "Fold"} ${band.label}`);
-    title.append(fold, el("strong", "", band.label), el("span", "count", String(band.count)));
-    if (band.note) title.append(el("span", "muted", band.note));
-    const tr = fullWidthRow(band.depth === 0 ? "group-row top-level" : "group-row", title);
-    tr.style.setProperty("--depth", String(band.depth));
-    acceptJobDrops(tr, band.project);
-    return tr;
+    row.append(fold, el("strong", "", band.label), el("span", "count", String(band.count)));
+    if (band.note) row.append(el("span", "muted band-note", band.note));
+    acceptJobDrops(row, band.project);
+    return row;
   }
 
   /** A project band takes dragged jobs: they move to its project. */
-  function acceptJobDrops(tr, project) {
+  function acceptJobDrops(row, project) {
     const carriesJobs = (event) => event.dataTransfer?.types.includes(JOBS_DRAG_MIME);
-    tr.addEventListener("dragover", (event) => {
+    row.addEventListener("dragover", (event) => {
       if (!carriesJobs(event)) return;
       event.preventDefault();
-      tr.classList.add("drop-target");
+      row.classList.add("drop-target");
     });
-    tr.addEventListener("dragleave", () => tr.classList.remove("drop-target"));
-    tr.addEventListener("drop", (event) => {
+    row.addEventListener("dragleave", () => row.classList.remove("drop-target"));
+    row.addEventListener("drop", (event) => {
       if (!carriesJobs(event)) return;
       event.preventDefault();
-      tr.classList.remove("drop-target");
+      row.classList.remove("drop-target");
       vscode.postMessage({ type: "dropOnProject", keys: JSON.parse(event.dataTransfer.getData(JOBS_DRAG_MIME)), project });
     });
   }
@@ -150,11 +337,11 @@
    * A selected row drags the whole selection, any other row only itself; shown as a stack of cards under the cursor.
    * While it drags, the table folds into one band per project, so every target is in view.
    */
-  function dragJobs(tr, row) {
-    tr.draggable = true;
-    tr.addEventListener("dragstart", (event) => {
-      const selected = row.selected ? shownRows.filter((shown) => shown.selected) : [row];
-      event.dataTransfer.setData(JOBS_DRAG_MIME, JSON.stringify(selected.map((row) => row.key)));
+  function dragJobs(row, jobRowModel) {
+    row.draggable = true;
+    row.addEventListener("dragstart", (event) => {
+      const selected = jobRowModel.selected ? shownRows.filter((shown) => shown.selected) : [jobRowModel];
+      event.dataTransfer.setData(JOBS_DRAG_MIME, JSON.stringify(selected.map((shown) => shown.key)));
       event.dataTransfer.effectAllowed = "move";
       const image = dragImage(selected);
       document.body.append(image);
@@ -164,10 +351,10 @@
       setTimeout(() => {
         image.remove();
         app.classList.add("dragging-jobs");
-        app.querySelector(".table-wrapper")?.scrollIntoView({ block: "start" });
+        app.querySelector(".grid")?.scrollIntoView({ block: "start" });
       });
     });
-    tr.addEventListener("dragend", () => {
+    row.addEventListener("dragend", () => {
       const { scrollY, deferredMessage } = drag;
       drag = undefined;
       app.classList.remove("dragging-jobs");
@@ -183,11 +370,56 @@
     const stack = el("div", "drag-image");
     for (const row of rows.slice(0, DRAG_IMAGE_ROWS)) {
       const card = el("div", "drag-card");
-      card.append(el("span", "mono muted", `${row.cluster} · ${row.id}`), " ", el("span", "mono", row.name));
+      card.append(el("span", "mono muted", `${row.cluster} ${row.id}`), " ", el("span", "", row.name));
       stack.append(card);
     }
     if (rows.length > DRAG_IMAGE_ROWS) stack.append(el("div", "drag-more", `+ ${rows.length - DRAG_IMAGE_ROWS} more`));
     return stack;
+  }
+
+  /** What a job's row shows in `column`. */
+  function jobCell(row, column) {
+    const cell = el("span", `cell cell-${column}`);
+    cell.setAttribute("role", "cell");
+    switch (column) {
+      case "id":
+        cell.append(el("span", "muted", row.cluster), " ", el("span", "mono", row.id));
+        break;
+      case "name":
+        cell.textContent = row.name;
+        cell.title = row.name;
+        break;
+      case "note":
+        if (row.note) {
+          cell.textContent = row.note.preview;
+          cell.title = row.note.text;
+        }
+        break;
+      case "state":
+        cell.classList.add(`group-${row.group ?? "other"}`);
+        cell.title = row.state;
+        cell.append(icon(row.group ?? "other"), el("span", "", row.stateLabel));
+        break;
+      case "start":
+        if (row.group === "queued") cell.classList.add("muted");
+        cell.textContent = row.startText ?? "";
+        break;
+      case "elapsed":
+        cell.append(el("span", "", row.elapsedText), el("span", "muted", ` / ${row.limitText}`));
+        if (row.group === "running" && row.progress !== undefined) {
+          const track = el("span", "track");
+          const fill = el("span", "fill");
+          fill.style.width = `${row.progress * 100}%`;
+          track.append(fill);
+          cell.append(track);
+        }
+        break;
+      case "partition":
+        cell.classList.add("muted");
+        cell.textContent = row.partitionNodes;
+        break;
+    }
+    return cell;
   }
 
   /**
@@ -196,80 +428,49 @@
    * it. A right-click opens VS Code's context menu for the row.
    */
   function jobRow(row, depth) {
-    const tr = el("tr", ["job", row.expanded && "expanded", row.selected && "selected"].filter(Boolean).join(" "));
-    tr.style.setProperty("--depth", String(depth));
-    tr.dataset.rowKey = row.key;
-    tr.dataset.vscodeContext = JSON.stringify({ webviewSection: "job", jobKey: row.key, preventDefaultContextMenuItems: true });
-    tr.tabIndex = 0;
-    tr.setAttribute("aria-expanded", String(row.expanded));
-    tr.setAttribute("aria-selected", String(row.selected));
-    tr.title = row.expanded ? "Hide details" : "Show details";
-    dragJobs(tr, row);
+    const node = el("div", ["job", row.expanded && "expanded", row.selected && "selected"].filter(Boolean).join(" "));
+    node.setAttribute("role", "row");
+    node.style.setProperty("--depth", String(depth));
+    node.dataset.rowKey = row.key;
+    node.dataset.vscodeContext = JSON.stringify({ webviewSection: "job", jobKey: row.key, preventDefaultContextMenuItems: true });
+    node.tabIndex = 0;
+    node.setAttribute("aria-expanded", String(row.expanded));
+    node.setAttribute("aria-selected", String(row.selected));
+    dragJobs(node, row);
     const toggle = () => vscode.postMessage({ type: "expand", key: row.key });
     // A Shift-click would otherwise select the text between the two clicks.
-    tr.addEventListener("mousedown", (event) => {
+    node.addEventListener("mousedown", (event) => {
       if (event.shiftKey) event.preventDefault();
     });
-    tr.addEventListener("click", (event) => {
+    node.addEventListener("click", (event) => {
       if (event.ctrlKey || event.metaKey) vscode.postMessage({ type: "select", key: row.key, extend: "toggle" });
       else if (event.shiftKey) vscode.postMessage({ type: "select", key: row.key, extend: "range" });
       else if (!window.getSelection()?.toString()) toggle();
     });
-    tr.addEventListener("keydown", (event) => {
+    node.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       toggle();
     });
-
-    const idCell = el("td");
-    idCell.append(el("div", "", row.cluster), el("div", "mono muted", row.id));
-
-    const nameCell = el("td", "name-cell");
-    const name = el("div", "mono name", row.name);
-    name.title = row.name;
-    nameCell.append(name);
-    if (row.note) {
-      const note = el("div", "note-preview");
-      note.append(row.note.preview);
-      nameCell.append(note);
-    }
-
-    const stateCell = el("td");
-    stateCell.append(stateBadge(row.group, row.stateLabel, row.state));
-
-    const timeCell = el("td");
-    timeCell.append(el("div", "mono small elapsed", row.timeText));
-    if (row.progress !== undefined) {
-      const track = el("div", "track");
-      const fill = el("div", row.active ? "fill active" : "fill");
-      fill.style.width = `${row.progress * 100}%`;
-      track.append(fill);
-      timeCell.append(track);
-    }
-
-    const startCell = el("td", row.group === "queued" ? "small muted" : "small", row.startText ?? "");
-
-    tr.append(idCell, nameCell, stateCell, startCell, timeCell, el("td", "mono small muted", row.partitionNodes));
-    return tr;
+    for (const column of model.columns) node.append(jobCell(row, column.id));
+    if (hasSpacer()) node.append(el("span", "cell"));
+    return node;
   }
 
+  /** A row across the whole table, for notices and the empty state. */
   function fullWidthRow(className, ...children) {
-    const tr = el("tr", className);
-    const td = el("td");
-    td.colSpan = COLUMN_COUNT;
-    const content = el("div", "row-content");
-    content.append(...children);
-    td.append(content);
-    tr.append(td);
-    return tr;
+    const row = el("div", `full-row ${className}`);
+    row.setAttribute("role", "row");
+    row.append(...children);
+    return row;
   }
 
   function reviewButtons(key) {
     const actions = el("div", "review-actions");
     actions.append(
       button("primary", "Confirm", { type: "review", key, action: "confirm" }),
-      button("secondary", "Edit", { type: "review", key, action: "edit" }),
-      button("secondary", "Discard", { type: "review", key, action: "discard" }),
+      button("link-button", "Edit", { type: "review", key, action: "edit" }),
+      button("link-button", "Discard", { type: "review", key, action: "discard" }),
     );
     return actions;
   }
@@ -288,21 +489,25 @@
   }
 
   function noteDetail(key, note) {
-    const box = el("div", `note-box status-${note.status}`);
-    box.append(el("div", "note-status", note.statusLabel), el("p", "note-text", note.text));
+    const wrapper = el("div", "note-detail");
+    wrapper.append(el("p", "note-text", note.text));
     if (note.status === "unreviewed") {
       const actions = reviewButtons(key);
+      actions.prepend(el("span", "muted draft-label", "Draft by the agent"));
       actions.append(customizeNoteWritingButton());
-      box.append(actions);
+      wrapper.append(actions);
+    } else {
+      const actions = el("div", "review-actions");
+      actions.append(el("span", "muted draft-label", note.statusLabel), button("link-button", "Edit", { type: "review", key, action: "edit" }));
+      wrapper.append(actions);
     }
-    else box.append(button("link-button", "Edit", { type: "review", key, action: "edit" }));
-    return box;
+    return wrapper;
   }
 
   /** One add-on line: its text, a link to open and a command that helps. */
   function addOnDetail(line) {
     const node = el("span", line.muted ? "muted" : "");
-    node.append(el("span", line.muted ? "" : "mono small", line.text));
+    node.append(el("span", line.muted ? "" : "mono", line.text));
     if (line.link) node.append(" ", button("link-button", `${line.link.label} ↗`, { type: "openUrl", url: line.link.url }));
     if (line.help) node.append(" ", button("link-button", line.help.label, { type: "runCommand", command: line.help.command }));
     return node;
@@ -322,7 +527,7 @@
     if (code.pushed === false) line.append(el("span", "warning", "not on remote"));
     else line.append(code.pushed ? "pushed" : "push state unknown");
     if (code.uncommitted) line.append(" · ", el("span", "warning", `${code.uncommitted} uncommitted files`));
-    line.append(el("div", "muted small", `As of submit time, in ${code.workdir}.`));
+    line.append(el("span", "muted", ` · ${code.workdir}, at submit time`));
     return line;
   }
 
@@ -361,8 +566,15 @@
     return wrapper;
   }
 
-  function detailsRow(row) {
+  /**
+   * A job's details: an inset panel on the table's own grid, so each label sits under the
+   * job's ID and each value starts where the second column does.
+   */
+  function detailsRow(row, depth) {
     const details = row.details;
+    const node = el("div", "details-row");
+    node.setAttribute("role", "row");
+    node.style.setProperty("--depth", String(depth));
     const list = el("dl", "details");
     if (!details.hasRecord) {
       detailItem(list, "Record", el("span", "muted", "No job record: submitted without ctun run, or before records existed."));
@@ -376,53 +588,46 @@
     addOnDetails(list, details.addOnLines);
     if (details.edits.length) {
       const edits = el("ul", "edits");
-      for (const edit of details.edits) edits.append(el("li", "small", edit));
+      for (const edit of details.edits) edits.append(el("li", "", edit));
       detailItem(list, "Edits", edits);
     }
-    return fullWidthRow("details-row", list);
-  }
-
-  const SORT_ARROWS = { ascending: "↑", descending: "↓" };
-
-  /** A column header whose button sorts by it; `aria-sort` tells screen readers the order. */
-  function columnHeader(column) {
-    const th = el("th");
-    if (column.sort) th.setAttribute("aria-sort", column.sort);
-    const sortButton = button("sort-button", column.label, { type: "sort", column: column.id });
-    sortButton.append(el("span", "sort-arrow", column.sort ? SORT_ARROWS[column.sort] : ""));
-    th.append(sortButton);
-    return th;
+    node.append(list);
+    return node;
   }
 
   /** What to do with the Ctrl/Shift-selected rows; absent while none is selected. */
-  function selectionBar(model) {
+  function selectionBar() {
     const bar = el("div", "selection-bar");
     bar.setAttribute("role", "group");
     bar.setAttribute("aria-label", "Selected jobs");
     bar.append(
       el("span", "", `${model.selectedCount} selected`),
       button("primary", "Move to project…", { type: "moveToProject" }),
-      button("secondary", "Clear", { type: "clearSelection" }),
+      button("link-button", "Clear", { type: "clearSelection" }),
     );
     return bar;
   }
 
-  function table(model) {
+  function table() {
     const wrapper = el("div", "table-wrapper");
-    if (model.selectedCount > 0) wrapper.append(selectionBar(model));
-    const tableNode = el("table");
-    tableNode.setAttribute("aria-label", "Cluster jobs");
-    const head = el("thead");
-    const headRow = el("tr");
-    for (const column of model.columns) headRow.append(columnHeader(column));
-    head.append(headRow);
+    if (model.selectedCount > 0) wrapper.append(selectionBar());
+    const grid = el("div", "grid");
+    grid.setAttribute("role", "table");
+    grid.setAttribute("aria-label", "Cluster jobs");
+    grid.style.setProperty("--columns", columnTemplate());
 
-    const body = el("tbody", "job-rows");
+    const head = el("div", "header-row");
+    head.setAttribute("role", "row");
+    model.columns.forEach((column, index) => head.append(columnHeader(column, index)));
+    if (hasSpacer()) head.append(el("span", "th"));
+
+    const body = el("div", "job-rows");
+    body.setAttribute("role", "rowgroup");
     for (const band of model.groups) {
       body.append(projectBand(band));
       for (const row of band.rows) {
         body.append(jobRow(row, band.depth));
-        if (row.details) body.append(detailsRow(row));
+        if (row.details) body.append(detailsRow(row, band.depth));
       }
     }
     if (model.showEmpty) body.append(fullWidthRow("empty", el("span", "", "No jobs match these filters.")));
@@ -438,30 +643,31 @@
       body.append(fullWidthRow("notice", text, action));
     }
 
-    tableNode.append(head, body, dropTargets(model));
-    wrapper.append(tableNode);
+    grid.append(head, body, dropTargets());
+    wrapper.append(grid);
     return wrapper;
   }
 
   /** One folded band per project, shown in place of the job rows while jobs are dragged. */
-  function dropTargets(model) {
-    const body = el("tbody", "drop-targets");
+  function dropTargets() {
+    const body = el("div", "drop-targets");
+    body.setAttribute("role", "rowgroup");
     for (const target of model.dropTargets) {
-      const title = el("span", "band-title");
-      title.append(el("span", "chevron"), el("strong", "", target.label));
-      const tr = fullWidthRow(target.depth === 0 ? "group-row top-level" : "group-row", title);
-      tr.style.setProperty("--depth", String(target.depth));
-      acceptJobDrops(tr, target.project);
-      body.append(tr);
+      const row = el("div", "group-row");
+      row.setAttribute("role", "row");
+      row.style.setProperty("--depth", String(target.depth));
+      row.append(icon("chevron", "chevron"), el("strong", "", target.label));
+      acceptJobDrops(row, target.project);
+      body.append(row);
     }
     return body;
   }
 
-  function reviewView(model) {
+  function reviewView() {
     const section = el("section", "review");
     const top = el("div", "review-top");
     top.append(
-      button("secondary", "Back to all jobs", { type: "setMode", mode: "jobs" }),
+      button("link-button", "← All jobs", { type: "setMode", mode: "jobs" }),
       el("p", "muted", "The agent's notes wait here until you confirm, edit or discard them. Facts from git, Slurm and W&B need no review. Your choice is saved in the job's record on the cluster."),
       customizeNoteWritingButton(),
     );
@@ -473,11 +679,10 @@
     for (const card of model.reviewCards) {
       const article = el("article", "review-card");
       const heading = el("div", "review-heading");
-      heading.append(el("strong", "mono", card.name), " ", el("span", "muted", card.stateLabel));
+      heading.append(el("strong", "", card.name), " ", el("span", "muted", card.stateLabel));
       article.append(
         heading,
         el("div", "muted small", [`Job ${card.id} on ${card.cluster}`, `project ${card.project}`, card.submittedText && `submitted ${card.submittedText}`].filter(Boolean).join(" · ")),
-        el("div", "note-status", "Unreviewed · agent draft"),
         el("p", "note-text", card.note),
       );
       if (card.references.length) {
@@ -506,13 +711,15 @@
   });
 
   function render(message) {
-    const model = message.model;
+    model = message.model;
     shownRows = model.groups.flatMap((band) => band.rows);
     const focusedKey = /** @type {HTMLElement | null} */ (document.activeElement)?.dataset?.key;
-    app.replaceChildren(header(model, message.refreshing), filters(model));
+    app.style.setProperty("--indent-step", `${INDENT_STEP}px`);
+    app.replaceChildren(toolbar(message.refreshing));
     if (message.error) app.append(el("p", "notice error", `ctun failed: ${message.error}`));
-    app.append(model.mode === "review" ? reviewView(model) : table(model));
+    app.append(model.mode === "review" ? reviewView() : table());
     app.setAttribute("aria-busy", String(message.refreshing));
+    renderColumnMenu();
     restoreFocus(focusedKey);
     scrollToRevealed(message.reveal);
   }
@@ -520,7 +727,7 @@
   /** Scrolls to the row another tab asked for, once; waits for a later model while the row is not there yet. */
   function scrollToRevealed(reveal) {
     if (!reveal || reveal.serial === revealedSerial) return;
-    const row = [...app.querySelectorAll("tr.job")].find((node) => node.dataset.rowKey === reveal.key);
+    const row = [...app.querySelectorAll(".job")].find((node) => node.dataset.rowKey === reveal.key);
     if (!row) return;
     revealedSerial = reveal.serial;
     row.scrollIntoView({ block: "center" });

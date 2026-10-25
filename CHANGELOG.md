@@ -18,6 +18,15 @@ All notable changes to the ctun VS Code extension. The format follows
   newest start comes first. The start time (or Slurm's
   estimate for a queued job) has its own Start column, apart from Elapsed / limit.
   A click on a job row opens its details; the Details button is gone.
+- The job list looks like VS Code's own views: one toolbar row, rows of one
+  line with the note cut off, a state icon with color only for Running and
+  Failed, project bands like tree groups, and the details as an inset panel
+  whose labels sit under the ID and whose values start at the second column.
+  Colors come from the theme, so light and high-contrast themes work.
+- Columns: Note has its own column; a header's divider widens its column, the
+  header drags to move it, and the column button or a right-click on a header
+  hides or shows columns. ID stays first and shown. The layout is kept per
+  machine in `globalState`.
 - Projects: the table is grouped by project, and a Projects view shows the
   counts. Its eyes hide projects from the table, a project's eye also hiding the
   ones nested in it; hidden projects are kept in `globalState`. The project is the job

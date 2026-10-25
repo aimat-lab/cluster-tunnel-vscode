@@ -40,7 +40,11 @@ straight to ctun's stdin.
   it is visible; an all-time list reloads only on Refresh or after an edit,
   since each load asks `sacct` for every job you ever ran. A click on a column header sorts the jobs inside
   each project by it (ascending, descending, then back to the default: newest start
-  first). A click
+  first). Drag a header's divider to widen its column, drag the header itself to
+  move the column, and hide or show columns with the column button in the
+  toolbar or a right-click on a header. ID stays first, since it carries the
+  nesting indent, and Note takes the width the others leave. The layout is kept
+  per machine. A click
   on a row, or Enter, opens its details:
   - the agent's **note**, an unreviewed draft until you confirm, edit or discard it;
   - **Record**, when the job has none, or one made by `ctun jobs edit` without

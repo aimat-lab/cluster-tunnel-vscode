@@ -1,15 +1,15 @@
 {
-  "name": "cluster-tunnel-vscode",
+  "name": "cluster-tunnel",
   "displayName": "Cluster Tunnel",
   "description": "Shows your HPC clusters and Slurm jobs through the ctun CLI.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "aimat-lab",
+  "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/aimat-lab/cluster-tunnel-vscode.git"
   },
-  "private": true,
   "engines": {
     "vscode": "^1.100.0"
   },

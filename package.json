@@ -141,6 +141,11 @@
         "category": "ctun"
       },
       {
+        "command": "ctun.customizeNoteWriting",
+        "title": "Customize Note Writing…",
+        "category": "ctun"
+      },
+      {
         "command": "ctun.addons.wandb.enable",
         "title": "Turn On the W&B Add-on",
         "category": "ctun"

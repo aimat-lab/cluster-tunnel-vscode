@@ -82,7 +82,10 @@ straight to ctun's stdin.
   `ctun jobs edit <id> --confirm-note`, Edit `--note <text> --confirm-note`, and
   Discard `--note ""`. A note changed later is unconfirmed again, and the record's
   edit log keeps the old text. The "To review" button and the status bar's
-  tooltip show how many wait.
+  tooltip show how many wait. **Customize note writing…** (in review mode and
+  on a draft) opens `writing-notes.local.md` in ctun's installed skill, your own
+  directions that agents follow over the skill's `writing-notes.md`; it is made
+  from a template the first time, and updating the skill keeps it.
 - **Status bar**: connected clusters and budget use.
 
 ## Add-ons
@@ -146,6 +149,7 @@ The W&B API key goes in VS Code's SecretStorage: run **ctun: Set W&B API Key**.
 | ctun: Review Agent Notes | status bar, "To review" button |
 | Move to Project… / Edit Note… | right-click on a job row; the selection bar |
 | ctun: Install the Claude Code Skill | Setup view, Command Palette |
+| ctun: Customize Note Writing… | Review mode, a draft note's details, Command Palette |
 | ctun: Turn On the W&B Add-on | Setup view, Command Palette |
 | ctun: Set / Remove W&B API Key | Setup view, Command Palette |
 | ctun: How to Tag W&B Runs | Setup view, a job's Training line, Command Palette |

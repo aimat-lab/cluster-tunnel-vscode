@@ -16,7 +16,7 @@ import { HIDDEN_PROJECTS_STATE_KEY, HiddenProjects } from "./hiddenProjects";
 import { askRenamedProject, ProjectRenameServices, renameProject } from "./projectRename";
 import { DRAFT_PROJECT_INFO, ProjectsView } from "./projectsView";
 import { SETUP_VIEW_ID, SetupView } from "./setupView";
-import { offerSkillInstall } from "./skillCommand";
+import { customizeNoteWriting, offerSkillInstall } from "./skillCommand";
 import { createStatusBar } from "./statusBar";
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -91,6 +91,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("ctun.refresh", () => data.refreshWithProjects()),
     vscode.commands.registerCommand("ctun.openConfig", () => openConfig(createCtun())),
     vscode.commands.registerCommand("ctun.installSkill", () => offerSkillInstall(createCtun(), () => setup.refresh())),
+    vscode.commands.registerCommand("ctun.customizeNoteWriting", () => customizeNoteWriting(createCtun(), () => setup.refresh())),
     vscode.commands.registerCommand("ctun.showJobs", showJobs),
     vscode.commands.registerCommand("ctun.showCommands", showCommands),
     vscode.commands.registerCommand("ctun.showReviews", () => showJobs().showReviews()),

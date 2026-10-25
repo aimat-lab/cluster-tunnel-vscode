@@ -22,6 +22,35 @@ export function globalSkillDir(env: NodeJS.ProcessEnv = process.env, homeDir = o
   return path.join(configDir, "skills", SKILL_NAME);
 }
 
+/** The user's own directions for job notes, beside the skill's `writing-notes.md`; ctun never ships it, so installs keep it. */
+export const NOTE_WRITING_FILE = "writing-notes.local.md";
+
+const NOTE_WRITING_TEMPLATE = `# My directions for job notes
+
+Agents read this file before they write a job note (\`ctun run --note\`).
+What you write here takes precedence over writing-notes.md beside it.
+Updating the skill keeps this file.
+
+<!-- For example; delete what you don't want:
+- Write notes in English.
+- Always name the learning rate and the batch size.
+- Keep each note under 80 characters.
+-->
+`;
+
+/** Creates the note directions in `skillDir` from a template unless they are there; returns their path. */
+export async function ensureNoteWritingFile(skillDir: string): Promise<string> {
+  const file = path.join(skillDir, NOTE_WRITING_FILE);
+  try {
+    await fs.writeFile(file, NOTE_WRITING_TEMPLATE, { encoding: "utf8", flag: "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw error;
+    }
+  }
+  return file;
+}
+
 /** True when the skill's entry file is there; a folder without it does not count. */
 export async function isSkillInstalled(skillDir: string): Promise<boolean> {
   try {

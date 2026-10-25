@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { test } from "node:test";
-import { FetchLike, globalSkillDir, installSkill, isSkillInstalled } from "../../skill";
+import { ensureNoteWritingFile, FetchLike, globalSkillDir, installSkill, isSkillInstalled } from "../../skill";
 
 const CONTENTS = "https://api.github.com/repos/aimat-lab/cluster-tunnel/contents/skill";
 
@@ -52,4 +52,15 @@ test("falls back to main when the version has no tag", async () => {
   const { fetchFn } = fakeGithub(["main"]);
   assert.strictEqual(await installSkill(skillDir, "0.6.0.dev1", fetchFn), "main");
   await assert.rejects(installSkill(skillDir, "0.6.0", fakeGithub([]).fetchFn), /no skill files at v0\.6\.0 or main/);
+});
+
+test("makes the note directions from a template once and keeps the user's text after", async () => {
+  const skillDir = await tempDir();
+  const file = await ensureNoteWritingFile(skillDir);
+  assert.strictEqual(path.basename(file), "writing-notes.local.md");
+  assert.match(await fs.readFile(file, "utf8"), /^# My directions for job notes/);
+
+  await fs.writeFile(file, "Always name the learning rate.", "utf8");
+  await ensureNoteWritingFile(skillDir);
+  assert.strictEqual(await fs.readFile(file, "utf8"), "Always name the learning rate.");
 });

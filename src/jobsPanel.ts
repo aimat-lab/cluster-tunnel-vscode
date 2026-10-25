@@ -56,6 +56,7 @@ type WebviewMessage =
   | { type: "dropOnProject"; keys: string[]; project: string }
   | { type: "setMode"; mode: JobsTableModel["mode"] }
   | { type: "review"; key: string; action: "confirm" | "edit" | "discard" }
+  | { type: "customizeNoteWriting" }
   | { type: "loadChanges"; key: string }
   | { type: "showJob"; key: string }
   | { type: "openUrl"; url: string }
@@ -199,6 +200,9 @@ export class JobsPanel {
         return;
       case "review":
         await this.review(message.key, message.action);
+        return;
+      case "customizeNoteWriting":
+        await vscode.commands.executeCommand("ctun.customizeNoteWriting");
         return;
       case "loadChanges":
         await this.loadChanges(message.key);

@@ -207,9 +207,11 @@ test("renders the details of an expanded job and sends its actions", () => {
   assert.doesNotMatch(unpushed, /Training/);
 
   click("Confirm", details[0]);
+  click("Customize note writing…", details[0]);
   click("W&B ↗", details[0]);
-  assert.deepStrictEqual(sent.slice(-2), [
+  assert.deepStrictEqual(sent.slice(-3), [
     { type: "review", key: "haicore/101", action: "confirm" },
+    { type: "customizeNoteWriting" },
     { type: "openUrl", url: "https://wandb.ai/e/p/runs/r" },
   ]);
 });

@@ -274,6 +274,13 @@
     return actions;
   }
 
+  /** Opens the user's directions that agents follow when they write notes. */
+  function customizeNoteWritingButton() {
+    const node = button("link-button", "Customize note writing…", { type: "customizeNoteWriting" });
+    node.title = "Your own directions for the agents' notes, kept when the skill updates";
+    return node;
+  }
+
   function detailItem(list, term, ...content) {
     const dd = el("dd");
     dd.append(...content);
@@ -283,7 +290,11 @@
   function noteDetail(key, note) {
     const box = el("div", `note-box status-${note.status}`);
     box.append(el("div", "note-status", note.statusLabel), el("p", "note-text", note.text));
-    if (note.status === "unreviewed") box.append(reviewButtons(key));
+    if (note.status === "unreviewed") {
+      const actions = reviewButtons(key);
+      actions.append(customizeNoteWritingButton());
+      box.append(actions);
+    }
     else box.append(button("link-button", "Edit", { type: "review", key, action: "edit" }));
     return box;
   }
@@ -452,6 +463,7 @@
     top.append(
       button("secondary", "Back to all jobs", { type: "setMode", mode: "jobs" }),
       el("p", "muted", "The agent's notes wait here until you confirm, edit or discard them. Facts from git, Slurm and W&B need no review. Your choice is saved in the job's record on the cluster."),
+      customizeNoteWritingButton(),
     );
     section.append(top);
     if (model.reviewCards.length === 0) {

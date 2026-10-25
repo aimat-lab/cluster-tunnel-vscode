@@ -36,6 +36,8 @@ All notable changes to the ctun VS Code extension. The format follows
   bar's tooltip; the job rows don't mark them. A
   review is stored in the job's record through `ctun jobs edit`
   (`--confirm-note`, `--note`), so every machine and agent sees it.
+  **Customize note writing…** opens the user's own note directions,
+  `writing-notes.local.md` in ctun's installed skill, made from a template once.
 - Editing jobs: Ctrl/Shift-click selects rows; a row, or the selection by one of
   its rows, drags onto a project: while it drags, the table folds into one band
   per known project; **Move to project…** (to an

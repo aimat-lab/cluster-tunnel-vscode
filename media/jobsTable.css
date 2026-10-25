@@ -236,6 +236,9 @@ button:disabled { cursor: default; opacity: 0.6; }
 .dragging-jobs .rows-fold { display: none; }
 .dragging-jobs .targets-fold { display: block; }
 .group-row { position: relative; z-index: 1; transition: background-color 120ms ease, outline-color 120ms ease; }
+/* The copies of the rows that fade while the table folds: fixed where the rows were, under the bands. */
+.fading-rows { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.fading-rows > * { position: fixed; box-sizing: border-box; margin: 0; }
 .drag-image { position: fixed; top: -1000px; left: 0; display: flex; flex-direction: column; gap: 3px; }
 .drag-card {
   padding: 4px 10px;

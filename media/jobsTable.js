@@ -357,19 +357,22 @@
       // Changing the dragged row inside dragstart would cancel the drag, so fold just after it.
       setTimeout(() => {
         image.remove();
+        const ghosts = fadingCopies(visibleRows());
         glide(".rows-fold .group-row", ".targets-fold .group-row", () => {
           app.classList.add("dragging-jobs");
           app.querySelector(".grid")?.scrollIntoView({ block: "start" });
         });
+        fadeOut(ghosts);
       });
     });
     // A model that came during the drag renders once the bands have settled, so it does not cut the motion.
     row.addEventListener("dragend", () => {
       const { scrollY } = drag;
-      glide(".targets-fold .group-row", ".rows-fold .group-row", () => {
+      const offsets = glide(".targets-fold .group-row", ".rows-fold .group-row", () => {
         app.classList.remove("dragging-jobs");
         window.scrollTo(0, scrollY);
       });
+      fadeInBehindBands(offsets);
       setTimeout(() => {
         const { deferredMessage } = drag;
         drag = undefined;
@@ -382,15 +385,17 @@
    * Switches the table with `change` and lets each project band glide from where it was to
    * where it now is (FLIP): only the bands move, on the compositor, so a long table stays smooth.
    * A band that was not there fades in; one far off screen starts just past its edge. With
-   * reduced motion every band only fades in: a fade is no movement.
+   * reduced motion every band only fades in: a fade is no movement. Returns how far each
+   * band started from its new place, by project.
    */
   function glide(fromSelector, toSelector, change) {
     const before = new Map([...app.querySelectorAll(fromSelector)].map((band) => [band.dataset.project, band.getBoundingClientRect().top]));
     change();
     const reduced = prefersReducedMotion();
     const limit = window.innerHeight;
+    const offsets = new Map();
     for (const band of app.querySelectorAll(toSelector)) {
-      if (typeof band.animate !== "function") return;
+      if (typeof band.animate !== "function") break;
       const top = band.getBoundingClientRect().top;
       const old = before.get(band.dataset.project);
       const timing = { duration: FOLD_MS, easing: FOLD_EASING };
@@ -398,9 +403,69 @@
         band.animate([{ opacity: 0 }, { opacity: 1 }], timing);
       } else {
         const offset = Math.max(-limit, Math.min(limit, old - top));
+        offsets.set(band.dataset.project, offset);
         band.animate([{ transform: `translateY(${offset}px)` }, { transform: "none" }], timing);
       }
     }
+    return offsets;
+  }
+
+  /** The job and details rows on screen now; only these are animated, so a long table costs no more. */
+  function visibleRows() {
+    const bottom = window.innerHeight;
+    return [...app.querySelectorAll(".rows-fold .job, .rows-fold .details-row")].filter((node) => {
+      const box = node.getBoundingClientRect();
+      return box.bottom > 0 && box.top < bottom;
+    });
+  }
+
+  /**
+   * Copies of `rows` in a fixed layer at their place on screen, under the bands, so the jobs
+   * can fade while the table under them has already folded.
+   */
+  function fadingCopies(rows) {
+    if (rows.length === 0 || prefersNoAnimation()) return undefined;
+    const layer = el("div", "fading-rows");
+    layer.style.setProperty("--columns", app.querySelector(".grid")?.style.getPropertyValue("--columns") ?? "");
+    for (const node of rows) {
+      const box = node.getBoundingClientRect();
+      const copy = /** @type {HTMLElement} */ (node.cloneNode(true));
+      copy.removeAttribute("tabindex");
+      Object.assign(copy.style, { top: `${box.top}px`, left: `${box.left}px`, width: `${box.width}px`, height: `${box.height}px` });
+      layer.append(copy);
+    }
+    app.append(layer);
+    return layer;
+  }
+
+  /** The copies sink a little and fade, a bit faster than the bands glide. */
+  function fadeOut(layer) {
+    if (!layer) return;
+    const moves = prefersReducedMotion() ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1 }, { opacity: 0, transform: "translateY(-8px) scale(0.985)" }];
+    const animation = layer.animate(moves, { duration: FOLD_MS * 0.8, easing: FOLD_EASING, fill: "forwards" });
+    animation.onfinish = () => layer.remove();
+  }
+
+  /** After a drop the rows on screen come out of their band: from where it started, fading in. */
+  function fadeInBehindBands(offsets) {
+    if (prefersNoAnimation()) return;
+    const reduced = prefersReducedMotion();
+    let offset = 0;
+    for (const node of app.querySelectorAll(".rows-fold .job-rows > *")) {
+      if (node.classList.contains("group-row")) {
+        offset = offsets.get(node.dataset.project) ?? 0;
+        continue;
+      }
+      const box = node.getBoundingClientRect();
+      if (box.bottom <= 0 || box.top >= window.innerHeight) continue;
+      const from = reduced ? { opacity: 0 } : { opacity: 0, transform: `translateY(${offset}px)` };
+      node.animate([from, { opacity: 1, transform: "none" }], { duration: FOLD_MS, easing: FOLD_EASING });
+    }
+  }
+
+  /** True where the page cannot animate at all, such as in tests. */
+  function prefersNoAnimation() {
+    return typeof app.animate !== "function";
   }
 
   /**

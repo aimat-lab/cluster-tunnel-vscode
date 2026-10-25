@@ -21,6 +21,7 @@ interface Credentials {
  * Logs in to `cluster` and waits until its tunnel is live.
  *
  * `sessionLimit` replaces the configured limit as the budget box's default.
+ * `deadline` (a `Date.now()` time) ends the ctun login there instead of after `LOGIN_TIMEOUT_MS`.
  */
 export async function logIn(
   ctun: Ctun,
@@ -28,6 +29,7 @@ export async function logIn(
   cluster: string,
   method: LoginMethod,
   sessionLimit?: number | null,
+  deadline?: number,
 ): Promise<LoginOutcome> {
   let credentials: Credentials | undefined;
   if (method === "vscode") {
@@ -42,6 +44,12 @@ export async function logIn(
       return { status: "cancelled" };
     }
   }
+  const timeoutMs = deadline === undefined ? LOGIN_TIMEOUT_MS : deadline - Date.now();
+  if (timeoutMs <= 0) {
+    const message = `ctun stopped waiting before the login to ${cluster} could start.`;
+    void vscode.window.showWarningMessage(`ctun: ${message}`);
+    return { status: "failed", message };
+  }
   data.loggingIn.add(cluster);
   data.notify();
   try {
@@ -49,10 +57,10 @@ export async function logIn(
       // The secrets go to ctun on stdin only, never in argv or the environment.
       await ctun.run(["-t", cluster, "login", "--credentials-stdin"], {
         input: JSON.stringify(credentials),
-        timeoutMs: LOGIN_TIMEOUT_MS,
+        timeoutMs,
       });
     } else {
-      await ctun.run(["-t", cluster, "login", "--interactive"], { timeoutMs: LOGIN_TIMEOUT_MS });
+      await ctun.run(["-t", cluster, "login", "--interactive"], { timeoutMs });
     }
     const live = await waitUntilLive(ctun, cluster);
     if (live) {

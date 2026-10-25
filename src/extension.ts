@@ -104,11 +104,13 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
   registerWandbAddOn(context, addOns);
-  void announceLoginBridge(context, (request) =>
-    loginMethod() === "vscode"
-      ? logIn(createCtun(), data, request.cluster, "vscode", request.session_limit)
-      : Promise.resolve(undefined),
-  );
+  void announceLoginBridge(context, (request) => {
+    if (loginMethod() !== "vscode") {
+      return Promise.resolve(undefined);
+    }
+    const deadline = Date.now() + request.timeout * 1000;
+    return logIn(createCtun(request.config), data, request.cluster, "vscode", request.session_limit, deadline);
+  });
   void data.refresh();
 }
 
@@ -135,9 +137,10 @@ async function announceLoginBridge(context: vscode.ExtensionContext, answer: Log
 
 export function deactivate(): void {}
 
-function createCtun(): Ctun {
+/** `configPath` makes every call use that config file instead of ctun's default. */
+function createCtun(configPath?: string): Ctun {
   const ctunPath = vscode.workspace.getConfiguration("ctun").get<string>("path") || "ctun";
-  return new Ctun([ctunPath]);
+  return new Ctun(configPath === undefined ? [ctunPath] : [ctunPath, "--config", configPath]);
 }
 
 function loginMethod(): LoginMethod {

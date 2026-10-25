@@ -83,6 +83,8 @@ without them show only the Slurm columns.
   and the bare commands only. W&B's cluster tags need a ctun whose `jobs --json`
   reports `slurm_cluster`; an older one matches only `slurm:<job id>`. Configured (`ctun config --init`), on `PATH` or set in
   `ctun.path`. On Windows, ctun runs ssh inside WSL 2; see ctun's README.
+- ctun 0.9.0 or newer, for `ctun login -i` from an agent or terminal to ask in
+  this window; an older ctun opens its own login window.
 - For the `window` login method: a display for ctun's login window (a small
   tkinter dialog).
 

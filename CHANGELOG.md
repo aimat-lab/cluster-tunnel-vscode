@@ -43,8 +43,10 @@ All notable changes to the ctun VS Code extension. The format follows
   input boxes, passed to `ctun login --credentials-stdin`.
 - `ctun login -i` from an agent or terminal of a VS Code window asks in that
   window's input boxes, not ctun's popup. The extension serves a local pipe per
-  window and names it in `CTUN_VSCODE_LOGIN`; it logs in itself and returns only
-  the outcome, so the secrets never reach the agent's process. The native login is
+  window and names it in `CTUN_LOGIN_BRIDGE` (ctun 0.9.0 or newer); it logs in
+  itself, with the config file of the ctun that asked and within that ctun's
+  timeout, and returns only the outcome, so the secrets never reach the agent's
+  process. The native login is
   now the default, and the extension activates on startup.
 - "Commands · <cluster>" tab from `ctun logs --json`: the commands sent this
   session as a transcript, the jobs each `sbatch` submitted and each `scancel`

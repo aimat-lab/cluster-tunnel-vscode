@@ -3,13 +3,16 @@ import * as net from "net";
 import * as os from "os";
 import * as path from "path";
 
-/** Names this window's bridge to `ctun login -i` (`cluster_tunnel.vscode_login`). */
-export const BRIDGE_VARIABLE = "CTUN_VSCODE_LOGIN";
+/** Names this window's bridge to `ctun login -i` (`cluster_tunnel.login_bridge`). */
+export const BRIDGE_VARIABLE = "CTUN_LOGIN_BRIDGE";
 
-/** What `ctun login -i` asks: the cluster and the session limit it would have used. */
+/** What `ctun login -i` asks: the cluster, the session limit it would have used, its config file and how long it waits. */
 export interface LoginRequest {
   cluster: string;
   session_limit: number | null;
+  config: string;
+  /** Seconds until ctun stops waiting for the outcome. */
+  timeout: number;
 }
 
 export type LoginOutcome = { status: "live" } | { status: "cancelled" } | { status: "failed"; message: string };

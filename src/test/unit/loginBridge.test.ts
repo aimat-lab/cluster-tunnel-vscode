@@ -31,15 +31,15 @@ test("passes ctun's request to the answer and returns its outcome as one line", 
     return { status: "live" };
   };
   await withBridge(answer, async (address) => {
-    const reply = await ask(address, { cluster: "haicore", session_limit: 20 });
+    const reply = await ask(address, { cluster: "haicore", session_limit: 20, config: "/home/u/.config/ctun/config.yaml", timeout: 120 });
     assert.strictEqual(reply, '{"status":"live"}\n');
   });
-  assert.deepStrictEqual(received, [{ cluster: "haicore", session_limit: 20 }]);
+  assert.deepStrictEqual(received, [{ cluster: "haicore", session_limit: 20, config: "/home/u/.config/ctun/config.yaml", timeout: 120 }]);
 });
 
 test("closes without a reply when the answer declines, so ctun opens its popup", async () => {
   await withBridge(async () => undefined, async (address) => {
-    assert.strictEqual(await ask(address, { cluster: "haicore", session_limit: null }), "");
+    assert.strictEqual(await ask(address, { cluster: "haicore", session_limit: null, config: "/home/u/.config/ctun/config.yaml", timeout: 120 }), "");
   });
 });
 

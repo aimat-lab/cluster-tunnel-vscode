@@ -1,165 +1,107 @@
 # Cluster Tunnel for VS Code
 
-Shows your HPC clusters and Slurm jobs in VS Code, through the
-[`ctun`](https://github.com/aimat-lab/cluster-tunnel) CLI. The extension is a thin
-wrapper: every cluster value comes from `ctun` (`status -j`, `jobs list --json`, `run`),
-and only optional add-ons such as W&B talk to other services, with your key. It has no SSH
-of its own. A password or OTP passes through it only with the VS Code login,
-straight to ctun's stdin.
+Your HPC clusters and Slurm jobs, inside VS Code. Log in with OTP, watch your jobs
+on every cluster, sort them into projects and review the notes your agents write
+about them.
 
-- **Clusters view** (activity bar): each configured cluster with its tunnel state,
-  session start, budget used / limit, commands sent and running / queued jobs.
-  Log in asks for the budget, OTP and password in VS Code input boxes, or opens
-  ctun's own login window (`ctun.login.method`); log out closes the tunnel.
-  `ctun login -i` run by an agent or in a terminal of the window asks there too.
-  Below it, **Projects** lists every project in ctun's job records, of all time
-  (`ctun projects list`), with its number of jobs; Unassigned counts the jobs of
-  the "Ended in" window. The eye next to a project
-  hides its jobs, and those of every project below it, in the job list; hidden
-  projects stay hidden across restarts (Settings Sync carries them). Opening the
-  eye of a project below a hidden one shows just that project. A click on a name
-  opens the job list with only that project and every project below it; the
-  arrow opens or closes its subprojects; **All projects** shows every project again.
-  A `/` nests projects:
-  `--project htfm/multihead` is `multihead` inside `htfm`, and the view is a tree
-  whose counts include the nested projects. Jobs submitted without `--project`
-  are Unassigned.
-- **Setup view** (below Projects): whether ctun is found, how many clusters its
-  config has, the login method, whether ctun's Claude Code skill is in your global
-  Claude folder (`~/.claude/skills/cluster-tunnel`, or under `CLAUDE_CONFIG_DIR`),
-  and one row per add-on. A click on the skill row offers to
-  download the skill from GitHub, at the tag of your ctun version, or opens its
-  documentation. Green is
-  fine, amber needs fixing, grey is an optional feature that is off. A click
-  opens the setting or runs the command that fixes the row.
-- **Cluster jobs** tab: one list of the jobs on every connected cluster, grouped by
-  project in indented bands (nested projects below their parent; a click on the
-  arrow folds a band) and filtered by state (Running, Queued, Completed, Failed,
-  Cancelled), by an "Ended in" window (24 h, 7 d by default, 30 d, or all time),
-  by cluster and by the eyes in the Projects view. It refreshes every 60 s while
-  it is visible; an all-time list reloads only on Refresh or after an edit,
-  since each load asks `sacct` for every job you ever ran. A click on a column header sorts the jobs inside
-  each project by it (ascending, descending, then back to the default: newest start
-  first). Drag a header's divider to widen its column, drag the header itself to
-  move the column, and hide or show columns with the column button in the
-  toolbar or a right-click on a header. ID stays first, since it carries the
-  nesting indent, and Note takes the width the others leave. The layout is kept
-  per machine. A click
-  on a row, or Enter, opens its details:
-  - the agent's **note**, an unreviewed draft until you confirm, edit or discard it;
-  - **Record**, when the job has none, or one made by `ctun jobs edit` without
-    submit-time facts;
-  - **Code**: the commit at submit time, whether it was pushed, uncommitted files;
-  - **From**: the machine and time of the submission;
-  - **Changes**: the previous run of the same project and job name, and the
-    commits between the two (`git log` on the cluster, loaded on request);
-  - the lines of each add-on that is on, e.g. W&B's **Training**;
-  - **Edits**: each `ctun jobs edit` of the record, with time and machine.
+![Sidebar with Clusters and Projects, Cluster jobs tab open](docs/images/overview.gif)
 
-  Ctrl-click (Cmd-click on macOS) selects a row. Shift-click selects every row
-  from the last one clicked and closes their details. Drag a row, or the
-  selection by one of its rows: while it drags, the table folds into one band
-  per project, drafts included, and a drop on a band moves the jobs there (VS
-  Code hands no drag from the table to the Projects view). To drop on a project
-  that has no jobs yet, make it first with the
-  **New Project…** button in the Projects view's title bar: it goes into the
-  selected project, or at the top level. While it has no jobs it is marked
-  "draft": ctun stores a job's project in the job's record, so a project without
-  jobs exists only in VS Code (Settings Sync carries it), and ctun and agents
-  don't see it. Its (i) explains this, and its trash icon deletes it. Drag a
-  project onto another to nest it there, or onto **All projects** to move it to
-  the top level; a right-click offers **Rename Project…**. After your yes, both
-  run `ctun projects rename`, which changes the project of all its jobs, of all
-  time, and of the projects nested in it, on every connected cluster. A bar also offers **Move to project…**: an existing project, Unassigned, or a new one (a
-  `/` nests it). A right-click on a row offers **Move to Project…** (for the
-  selection, or that row alone) and **Edit Note…**. Each change runs one
-  `ctun -t <cluster> jobs edit` per cluster and reloads the jobs. It is stored in the
-  job's record on the cluster, so every machine and agent sees it.
-- **Commands** tab (`Commands · <cluster>`): the commands sent to one cluster this
-  session, as a console transcript from `ctun logs --json`, with a divider where
-  five minutes or more passed. Under each `sbatch` and `scancel`, a box names the
-  job with its state and run time; a click on the job ID opens it in "Cluster
-  jobs". Copy all copies the commands, one per line. Open it from the
-  "Commands" row of a cluster or with **ctun: Show Commands Sent**.
-- **To review**: all notes no one has confirmed yet, as cards. Your review is
-  stored in the job's record, so every machine and agent sees it: Confirm runs
-  `ctun jobs edit <id> --confirm-note`, Edit `--note <text> --confirm-note`, and
-  Discard `--note ""`. A note changed later is unconfirmed again, and the record's
-  edit log keeps the old text. The "To review" button and the status bar's
-  tooltip show how many wait. **Customize note writing…** (in review mode and
-  on a draft) opens `writing-notes.local.md` in ctun's installed skill, your own
-  directions that agents follow over the skill's `writing-notes.md`; it is made
-  from a template the first time, and updating the skill keeps it.
-- **Status bar**: connected clusters and budget use.
+The extension is a thin wrapper around the
+[`ctun`](https://github.com/aimat-lab/cluster-tunnel) CLI. It has no SSH of its
+own, and your password and OTP go straight to ctun's stdin.
 
-## Add-ons
+## Quick start
 
-Add-ons bring in other libraries. Each one is off until you turn it on, and the
-core asks it for two things only: lines in a job's details, and a row in the
-Setup view. The core draws them; an add-on never
-touches the table. The interface is in `src/addOns.ts`; it is internal for now.
+1. **Install ctun** 0.9.0 or newer, as its
+   [README](https://github.com/aimat-lab/cluster-tunnel) describes, and run
+   `ctun config --init`. On Windows, ctun runs ssh inside WSL 2.
+2. **Install the extension.** It is not on the Marketplace yet:
 
-- **W&B** (`ctun.addons.wandb.enabled`): a **Training** line with the epoch and
-  metrics of the job's W&B run and a link to it. A run is found by its tag
-  `slurm:<ClusterName>:<job id>`, or the older `slurm:<job id>`, in the
-  entity's first 100 projects. The job's project stays its ctun `--project`; keep
-  your W&B project names in line with it yourself. Your training script adds the tag:
-  [docs/wandb-tagging.md](docs/wandb-tagging.md), also **ctun: How to Tag W&B
-  Runs**.
+   ```bash
+   code --install-extension cluster-tunnel-0.1.0.vsix
+   ```
 
-Notes and code facts come from the job records that `ctun run` writes
-on the cluster (ctun with job records; see its `reference.md`). Jobs submitted
-without them show only the Slurm columns.
+   Or in VS Code: open the Extensions view (`Ctrl+Shift+X`), click `…` at the
+   top of it, choose **Install from VSIX…** and pick the file.
 
-## Requirements
+3. **Log in.** Open the ctun icon in the activity bar and click the login icon on
+   a cluster's row.
 
-- `ctun` 0.9.0 or newer, with `ctun jobs list`, `ctun jobs edit` and `ctun projects list`; the Setup view
-  marks an older one. Until 0.9.0 is released, install it from the fork:
-  `uv tool install git+https://github.com/Luguza/cluster-tunnel@feat/vscode-extension`. Configured (`ctun config --init`), on `PATH` or set in
-  `ctun.path`. On Windows, ctun runs ssh inside WSL 2; see ctun's README.
-- ctun 0.9.0 or newer, for `ctun login -i` from an agent or terminal to ask in
-  this window; an older ctun opens its own login window.
-- For the `window` login method: a display for ctun's login window (a small
-  tkinter dialog).
+The **Setup** view in the sidebar shows what is missing and fixes it in one click.
 
-## Install
+## Features
 
-The extension is not on the Marketplace yet. Install the `.vsix` file:
+### Log in from VS Code
 
-```bash
-code --install-extension cluster-tunnel-0.1.0.vsix
+Each cluster shows its tunnel state, budget use and running / queued jobs. Log in
+asks for budget, OTP and password in VS Code input boxes. `ctun login -i` from an
+agent or terminal asks in the same window.
+
+![Clusters and Projects views](docs/images/clusters-view.png)
+
+### All your jobs in one table
+
+Jobs from every connected cluster, grouped by project, filtered by state, time
+and cluster. Click a job to see the agent's note, the commit it ran, and the
+commits since the previous run of the same job.
+
+![Cluster jobs table with project bands and an open job](docs/images/jobs-table.png)
+
+### Organize jobs into projects
+
+Drag jobs onto a project, nest projects with `/`, rename them. The project is
+stored in the job's record on the cluster, so every machine and agent sees it.
+
+![Dragging selected jobs onto a project band](docs/images/drag-jobs.gif)
+
+### Review agent notes
+
+Agents write a note for each job they submit. **To review** shows the
+unconfirmed ones as cards: confirm, edit or discard each one.
+
+![To review cards](docs/images/review.png)
+
+### Customize note writing
+
+Tell agents how you want notes written, e.g. "always name the learning rate".
+**Customize note writing…** (in review mode, on a draft note, or in the Command
+Palette) opens `writing-notes.local.md` in ctun's Claude Code skill. Agents follow
+it over the skill's own guide, and updating the skill keeps your file.
+
+![writing-notes.local.md with example directions](docs/images/customize-notes.png)
+
+### See what was sent
+
+The **Commands** tab lists every command sent to a cluster this session, with
+the state of each submitted job.
+
+![Commands tab](docs/images/commands-tab.png)
+
+### W&B training metrics
+
+Turn on the W&B add-on to see each job's epoch and metrics next to it. Your
+training script tags the run with its Slurm job:
+
+```python
+slurm_job_id = os.environ.get("SLURM_JOB_ID")
+if slurm_job_id:
+    run.tags = (*run.tags, f"slurm:{os.environ['SLURM_CLUSTER_NAME']}:{slurm_job_id}")
 ```
 
-or, in VS Code: Extensions view → `…` → **Install from VSIX…**.
+Full guide: [docs/wandb-tagging.md](docs/wandb-tagging.md), also **ctun: How to
+Tag W&B Runs**.
+
+![Job details with the W&B Training line](docs/images/wandb-training.png)
 
 ## Settings
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `ctun.path` | `ctun` | The `ctun` executable. Use an absolute path if VS Code does not find it on `PATH`, e.g. `C:\Users\<you>\.local\bin\ctun.exe`. |
-| `ctun.login.method` | `vscode` | `vscode`: VS Code input boxes for budget, OTP and password; the secrets reach ctun on stdin only (`ctun login --credentials-stdin`). `window`: ctun's login window. Applies to **Log in** and to `ctun login -i` from agents and terminals of the window. |
+| `ctun.path` | `ctun` | The `ctun` executable, if it is not on `PATH`. |
+| `ctun.login.method` | `vscode` | `vscode`: VS Code input boxes. `window`: ctun's own login window. |
 | `ctun.addons.wandb.enabled` | `false` | Turns on the W&B add-on. |
-| `ctun.addons.wandb.entity` | empty | W&B user or team whose projects are searched for tagged runs; empty means the API key's own. Only its first 100 projects are searched. |
-| `ctun.addons.wandb.metrics` | `val/loss`, `val/mae_T_trans` | Summary metrics shown per run. |
-
-The W&B API key goes in VS Code's SecretStorage: run **ctun: Set W&B API Key**.
-
-## Commands
-
-| Command | Where |
-|---|---|
-| ctun: Show Cluster Jobs | Clusters view title, the "Jobs" row |
-| ctun: Show Commands Sent | the "Commands" row, Command Palette |
-| ctun: Review Agent Notes | status bar, "To review" button |
-| Move to Project… / Edit Note… | right-click on a job row; the selection bar |
-| ctun: Install the Claude Code Skill | Setup view, Command Palette |
-| ctun: Customize Note Writing… | Review mode, a draft note's details, Command Palette |
-| ctun: Turn On the W&B Add-on | Setup view, Command Palette |
-| ctun: Set / Remove W&B API Key | Setup view, Command Palette |
-| ctun: How to Tag W&B Runs | Setup view, a job's Training line, Command Palette |
-| ctun: Refresh | Clusters view title |
-| ctun: Open ctun Config | Clusters view title |
-| Log in / Log out | the icon on a cluster's row |
+| `ctun.addons.wandb.entity` | empty | W&B user or team to search; empty means the API key's own. |
+| `ctun.addons.wandb.metrics` | `val/loss`, `val/mae_T_trans` | Metrics shown per run. |
 
 ## Development
 
@@ -170,15 +112,8 @@ npm run test:host   # starts a downloaded VS Code and activates the extension
 npm run package     # builds cluster-tunnel-<version>.vsix
 ```
 
-Press F5 with this folder open to start an Extension Development Host.
+Press F5 to start an Extension Development Host. To install the extension into
+your VS Code after every commit, run `git config core.hooksPath .githooks` once.
 
-To package and install the extension into your VS Code after every commit, turn
-on the repo's hooks once per clone:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-Branches: `main` holds what works with the released ctun and is what gets
-published; `dev` adds the features that need ctun changes not released yet.
-Publishing is described in [PUBLISHING.md](PUBLISHING.md).
+Branches: `main` works with the released ctun and gets published; `dev` adds
+features that need unreleased ctun changes. See [PUBLISHING.md](PUBLISHING.md).

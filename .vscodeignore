@@ -11,3 +11,4 @@ PUBLISHING.md
 .gitattributes
 docs/plans/**
 .githooks/**
+docs/images/**

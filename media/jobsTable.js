@@ -895,10 +895,10 @@
     const focusedKey = /** @type {HTMLElement | null} */ (document.activeElement)?.dataset?.key;
     app.style.setProperty("--indent-step", `${INDENT_STEP}px`);
     const bar = toolbar(message.refreshing);
-    app.replaceChildren(bar);
+    const error = message.error && el("p", "notice error", `ctun failed: ${message.error}`);
+    // One swap: emptying the page first would shrink it to the toolbar and reset the scroll to the top.
+    app.replaceChildren(...[bar, error, model.mode === "review" ? reviewView() : table()].filter(Boolean));
     followToolbarHeight(bar);
-    if (message.error) app.append(el("p", "notice error", `ctun failed: ${message.error}`));
-    app.append(model.mode === "review" ? reviewView() : table());
     app.setAttribute("aria-busy", String(message.refreshing));
     renderColumnMenu();
     if (before) animateChanges(before);
@@ -931,7 +931,7 @@
   function restoreFocus(key) {
     if (!key) return;
     const match = [...app.querySelectorAll("[data-key]")].find((node) => node.dataset.key === key);
-    match?.focus();
+    match?.focus({ preventScroll: true });
   }
 
   vscode.postMessage({ type: "ready" });

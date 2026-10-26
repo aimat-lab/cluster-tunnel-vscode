@@ -108,9 +108,9 @@
     if (message.type !== "model") return;
     const followNewest = !rendered || isAtBottom();
     const focusedKey = /** @type {HTMLElement | null} */ (document.activeElement)?.dataset?.key;
-    app.replaceChildren(toolbar(message.model, message.refreshing));
-    if (message.error) app.append(el("p", "error", `ctun failed: ${message.error}`));
-    app.append(transcript(message.model));
+    const error = message.error && el("p", "error", `ctun failed: ${message.error}`);
+    // One swap: emptying the page first would shrink it to the toolbar and reset the scroll to the top.
+    app.replaceChildren(...[toolbar(message.model, message.refreshing), error, transcript(message.model)].filter(Boolean));
     app.setAttribute("aria-busy", String(message.refreshing));
     restoreFocus(focusedKey);
     if (followNewest) window.scrollTo(0, document.body.scrollHeight);
@@ -121,7 +121,7 @@
   function restoreFocus(key) {
     if (!key) return;
     const match = [...app.querySelectorAll("[data-key]")].find((node) => node.dataset.key === key);
-    match?.focus();
+    match?.focus({ preventScroll: true });
   }
 
   vscode.postMessage({ type: "ready" });

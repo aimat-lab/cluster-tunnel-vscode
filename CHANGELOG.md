@@ -3,7 +3,7 @@
 All notable changes to the ctun VS Code extension. The format follows
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [0.1.0] - 2026-10-25
+## [0.1.0] - 2026-10-27
 
 ### Added
 

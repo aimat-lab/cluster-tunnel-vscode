@@ -15,14 +15,13 @@ own, and your password and OTP go straight to ctun's stdin.
 1. **Install ctun** 0.9.0 or newer, as its
    [README](https://github.com/aimat-lab/cluster-tunnel) describes, and run
    `ctun config --init`. On Windows, ctun runs ssh inside WSL 2.
-2. **Install the extension.** It is not on the Marketplace yet:
+2. **Install the extension** from the
+   [Marketplace](https://marketplace.visualstudio.com/items?itemName=AiMatGroup.cluster-tunnel):
+   search for **Cluster Tunnel** in the Extensions view (`Ctrl+Shift+X`), or run
 
    ```bash
-   code --install-extension cluster-tunnel-0.1.0.vsix
+   code --install-extension AiMatGroup.cluster-tunnel
    ```
-
-   Or in VS Code: open the Extensions view (`Ctrl+Shift+X`), click `…` at the
-   top of it, choose **Install from VSIX…** and pick the file.
 
 3. **Log in.** Open the ctun icon in the activity bar and click the login icon on
    a cluster's row.

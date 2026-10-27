@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 
-const EXTENSION_ID = "aimat-lab.cluster-tunnel";
+const EXTENSION_ID = "AiMatGroup.cluster-tunnel";
 
 /** Entry point VS Code calls inside the Extension Development Host. */
 export async function run(): Promise<void> {

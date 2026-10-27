@@ -20,7 +20,7 @@ cluster-tunnel's banner) is in place. Check the rest before a publish:
 | Item | Now | To do |
 |---|---|---|
 | License | MIT (`LICENSE`, `"license"` in `package.json`) | Nothing. Without a license file, vsce asks before it packages. |
-| Publisher | `"publisher": "aimat-lab"` | Must equal the publisher ID you create in step 3. The ID can never change. |
+| Publisher | `"publisher": "AiMatGroup"` | Must equal the publisher ID you create in step 3. The ID can never change. |
 | Repository | `aimat-lab/cluster-tunnel-vscode` | vsce turns README links into absolute URLs from it. If the repo moves, change the URL, and the publish trust in step 6, which names the repo. |
 | Name | `cluster-tunnel` / "Cluster Tunnel" | The name and display name must be unique on the Marketplace. Search for them first. |
 | README | Links only to files in the repo | Images must be `https` URLs and not SVG (except badges from trusted providers). |
@@ -45,7 +45,7 @@ needs a Microsoft login behind it, so use a group account:
 2. With that account, go to <https://marketplace.visualstudio.com/manage>. On
    the first login, Microsoft asks for a name, email and country ("We need a few
    more details"): fill it in and click **Continue**. Then click **Create
-   publisher**. Enter the **ID** (`aimat-lab`, or what `package.json` says, in
+   publisher**. Enter the **ID** (`AiMatGroup`, or what `package.json` says, in
    lowercase) and a display **Name**.
 3. Add the people who publish under **Members** → **Add**. Enter their
    Marketplace **User ID**, not their email: adding by email often fails with
@@ -91,7 +91,7 @@ Pick one way.
 2. Log in and publish:
 
    ```bash
-   npx vsce login aimat-lab     # paste the PAT
+   npx vsce login AiMatGroup     # paste the PAT
    npx vsce publish             # publishes the version in package.json
    ```
 
@@ -180,7 +180,7 @@ is odd minor numbers for pre-releases (`0.1.x`) and even ones for releases
 3. Once:
 
    ```bash
-   npx ovsx create-namespace aimat-lab -p <token>
+   npx ovsx create-namespace AiMatGroup -p <token>
    ```
 
 4. For each release, upload the same `.vsix`:
@@ -192,15 +192,15 @@ is odd minor numbers for pre-releases (`0.1.x`) and even ones for releases
 ## 9. After publishing
 
 - Within a few minutes, the extension shows at
-  `https://marketplace.visualstudio.com/items?itemName=aimat-lab.cluster-tunnel`.
+  `https://marketplace.visualstudio.com/items?itemName=AiMatGroup.cluster-tunnel`.
 - In the README, replace the "Install from VSIX" steps with the Marketplace
-  link, and with `code --install-extension aimat-lab.cluster-tunnel`.
+  link, and with `code --install-extension AiMatGroup.cluster-tunnel`.
 - Undo options, from mild to final:
   - **Unpublish** (manage page → More Actions): nobody can download it, and the
     statistics are kept.
   - **Delete this version** (Reports): that version number can never be used
     again. You cannot delete the latest version.
-  - **Remove**: `npx vsce unpublish aimat-lab.cluster-tunnel`, or manage page →
+  - **Remove**: `npx vsce unpublish AiMatGroup.cluster-tunnel`, or manage page →
     Remove. This deletes the statistics and reserves the name forever.
 
 ## Release checklist

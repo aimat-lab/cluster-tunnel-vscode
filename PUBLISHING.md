@@ -6,9 +6,8 @@ issue tracker in October 2026; the sources are listed at the end. Publishing is
 public and hard to undo: a removed extension name stays reserved forever, and a
 version number can never be reused.
 
-There are two ways to publish now: upload the `.vsix` in the browser (section
-3), or let GitHub Actions publish it (section 4). Trusted publishing, the simple
-way to do section 4, does not work yet (October 2026).
+There are two ways to publish: upload the `.vsix` in the browser (section 3), or
+let GitHub Actions publish it with trusted publishing (section 4).
 
 ## 1. The publisher
 
@@ -68,57 +67,33 @@ The version first shows **Verifying**: the Marketplace scans the package for
 malware, secrets and names that copy other extensions. After a few minutes it
 shows the plain version number, and you can install it from the Extensions view.
 
-## 4. Publish from GitHub Actions
+## 4. Publish from GitHub Actions: trusted publishing (`--oidc`)
 
-Neither way below stores a token in GitHub. Both trust only workflows in
-`aimat-lab/cluster-tunnel-vscode`, so publishing stays with the group's repo. If
-the repo moves, the trust must move with it.
+Trusted publishing stores no token in GitHub. It trusts only the publish
+workflow in `aimat-lab/cluster-tunnel-vscode`, so publishing stays with the
+group's repo.
 
-### 4a. Trusted publishing (`--oidc`): not available yet
+The Marketplace accepts `--oidc` since 28 October 2026. It needs vsce 4.1.0 or
+later (4.0.0 fails the token exchange) and Node.js 22 or later. The workflow
+trades a GitHub OIDC token for a Marketplace token that lasts 15 minutes.
 
-**Status, 25 October 2026:** vsce has the `--oidc` flag (since 4.0.0, which needs
-Node.js 22 or later), but the Marketplace does not accept it yet. On 8 October
-the token exchange still failed with `TrustedPublishingNotSupportedException`,
-and the Marketplace has no page to set up the policy. On 21 October the
-maintainers named Friday 30 October as their target. Before a release, check
-[vsce #1275](https://github.com/microsoft/vscode-vsce/issues/1275).
+1. On the manage page, open the publisher → **Trusted Publishing** → **Create**.
+   A **Contributor** may do this. Fill in:
+   - Provider: GitHub Actions
+   - Repository owner: `aimat-lab` (the GitHub owner, not the publisher)
+   - Repository: `cluster-tunnel-vscode`
+   - Workflow: `publish-extension.yml`
+   - Environment: empty (the workflow uses none; with a value, the exchange
+     fails)
+2. A new policy is **Inactive** until a run uses it, and the page shows a
+   deadline (about two days) for that first use.
+3. To publish, push a tag `v*`. The `publish` job stops if the tag does not
+   equal `v` + the `version` in `package.json`, runs the unit and host tests,
+   and then runs `vsce publish --oidc`. With `--oidc`, vsce never falls back to
+   a token. If the exchange fails, the job fails.
 
-No document names the publisher role that sets up the policy. The policy is a
-publisher setting, and only an **Owner** may change those.
-
-When it works, the workflow trades a GitHub OIDC token for a Marketplace token
-that lasts 15 minutes:
-
-1. On the Marketplace, add a **trusted publishing policy** for the repo and the
-   workflow file. The vsce README describes it under "Trusted publishing", and
-   the field names may change, so follow that page.
-2. The workflow is in place: `.github/workflows/publish-extension.yml`. A pushed
-   tag `v*` runs it. It stops if the tag does not equal `v` + the `version` in
-   `package.json`, runs the unit and host tests, and then runs
-   `vsce publish --oidc`. With `--oidc`, vsce never falls back to a token. If the
-   exchange fails, the job fails.
-
-Until the Marketplace accepts `--oidc`, do not push a `v*` tag: the job fails at
-the publish step.
-
-### 4b. Entra ID (`--azure-credential`): works today, more setup
-
-This is the way the VS Code docs recommend. Their example is for Azure
-Pipelines, but people use it from GitHub Actions too:
-
-1. Create an Entra ID app registration (or a managed identity) and give it a
-   **federated credential** that trusts GitHub Actions in this repo. Create it in
-   a tenant the group controls (KIT's, through IT, or one of the group
-   account), not in a personal one, or publishing hangs on one person again.
-2. Add that identity to the publisher as a **Contributor**. Without this, the
-   login works but the publish fails with "operation not allowed".
-3. In the workflow, log in with `azure/login` (OIDC, `id-token: write`) and run
-   `npx @vscode/vsce publish --azure-credential`.
-
-A federated credential matches one exact subject, so a credential for `main`
-does not match a tag-triggered run. Run the publish job in a GitHub
-environment (e.g. `marketplace`) and trust that environment instead. (Not yet
-tried here.)
+The policy matches the repo, the owner and the workflow file name. If you rename
+the workflow file or move the repo, update the policy.
 
 ## 5. Pre-releases (optional)
 
@@ -154,8 +129,6 @@ From mild to final:
 ## Sources
 
 - VS Code docs, [Publishing Extensions](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
-  (Entra ID, publisher, pre-release, restrictions, unpublishing)
+  (trusted publishing, publisher, pre-release, restrictions, unpublishing)
 - [vsce README, "Trusted publishing"](https://github.com/microsoft/vscode-vsce#trusted-publishing) (`--oidc` and its workflow)
-- [vsce #1275](https://github.com/microsoft/vscode-vsce/issues/1275) (the Marketplace does not accept `--oidc` yet, October 2026)
-- [DEV Community, "How did I automate a VS Code Marketplace release without a PAT?"](https://dev.to/john_smith_0fe98c53831097/how-did-i-automate-a-vs-code-marketplace-release-without-a-pat-17lo) (Entra ID from GitHub Actions; secondary source)
-- [Classmethod, July 2026](https://dev.classmethod.jp/en/articles/publish-vscode-extension-ci-marketplace-openvsx-npm/) (Entra ID from GitHub Actions; secondary source)
+- [vsce #1275](https://github.com/microsoft/vscode-vsce/issues/1275) (the Marketplace accepts `--oidc` with vsce 4.1.0 since 28 October 2026)

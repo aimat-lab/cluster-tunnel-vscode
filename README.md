@@ -23,8 +23,8 @@ own, and your password and OTP go straight to ctun's stdin.
    code --install-extension AiMatGroup.cluster-tunnel
    ```
 
-3. **Log in.** Open the ctun icon in the activity bar and click the login icon on
-   a cluster's row.
+3. **Log in.** Open the ctun icon in the activity bar and click **Log in** under
+   a cluster.
 
 The **Setup** view in the sidebar shows what is missing and fixes it in one click.
 
@@ -32,7 +32,8 @@ The **Setup** view in the sidebar shows what is missing and fixes it in one clic
 
 ### Log in from VS Code
 
-Each cluster shows its tunnel state, budget use and running / queued jobs. Log in
+Each cluster shows its tunnel state, budget use and running / queued jobs. Drag a
+cluster (or press Alt+Up / Alt+Down on it) to reorder them. **Log in**
 asks for budget, OTP and password in VS Code input boxes. `ctun login -i` from an
 agent or terminal asks in the same window.
 

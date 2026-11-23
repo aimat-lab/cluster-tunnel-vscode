@@ -1,4 +1,3 @@
-import * as crypto from "crypto";
 import * as vscode from "vscode";
 import type { AddOnRegistry } from "./addOnRegistry";
 import { DetailLine, JobRef, jobRefs } from "./addOns";
@@ -25,6 +24,7 @@ import {
 import { StateGroupId, stateGroup } from "./jobStates";
 import type { HiddenProjects } from "./hiddenProjects";
 import { normalizeProject, selfAndAncestors } from "./projectTree";
+import { webviewHtml } from "./webviewHtml";
 
 /** Each refresh runs `sacct` on a login node, so not more often than this. */
 const AUTO_REFRESH_MS = 60_000;
@@ -114,7 +114,7 @@ export class JobsPanel {
     private readonly services: JobsPanelServices,
   ) {
     panel.iconPath = vscode.Uri.joinPath(mediaRoot, "clusters.svg");
-    panel.webview.html = renderHtml(panel.webview, mediaRoot);
+    panel.webview.html = webviewHtml(panel.webview, mediaRoot, "jobsTable", "Cluster jobs");
     this.disposables.push(
       panel.webview.onDidReceiveMessage((message: WebviewMessage) => void this.handle(message)),
       panel.onDidChangeViewState(() => this.followVisibility()),
@@ -535,27 +535,3 @@ function nextSort(current: JobsSort, column: ColumnId): JobsSort {
   return isDefault ? { column, direction: "ascending" } : DEFAULT_SORT;
 }
 
-function renderHtml(webview: vscode.Webview, mediaRoot: vscode.Uri): string {
-  const nonce = crypto.randomBytes(16).toString("base64");
-  const script = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "jobsTable.js"));
-  const style = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "jobsTable.css"));
-  const csp = [
-    "default-src 'none'",
-    `style-src ${webview.cspSource}`,
-    `script-src 'nonce-${nonce}'`,
-  ].join("; ");
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${csp}">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="${style}">
-<title>Cluster jobs</title>
-</head>
-<body>
-<main id="app" aria-busy="true"></main>
-<script nonce="${nonce}" src="${script}"></script>
-</body>
-</html>`;
-}

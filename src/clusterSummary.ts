@@ -1,8 +1,6 @@
 import type { ClusterStatus, Job } from "./ctun";
 import { activeCounts } from "./jobStates";
 
-const BUDGET_BAR_SEGMENTS = 10;
-
 /** The detail lines the Clusters view shows under a live cluster. */
 export interface ClusterSummary {
   session: string;
@@ -28,12 +26,6 @@ export function summarize(status: ClusterStatus, clusterJobs: ClusterJobs | unde
     commands: `${status.commands.count} sent this session`,
     jobs: jobsText(clusterJobs),
   };
-}
-
-/** A text bar such as `▰▰▰▱▱▱▱▱▱▱` for a fraction between 0 and 1. */
-export function textBar(fraction: number): string {
-  const filled = Math.round(Math.min(1, Math.max(0, fraction)) * BUDGET_BAR_SEGMENTS);
-  return "▰".repeat(filled) + "▱".repeat(BUDGET_BAR_SEGMENTS - filled);
 }
 
 function budgetFraction(status: ClusterStatus): number | undefined {

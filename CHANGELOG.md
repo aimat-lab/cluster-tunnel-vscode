@@ -3,6 +3,18 @@
 All notable changes to the ctun VS Code extension. The format follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed
+
+- The Clusters view is a webview: a **Log in** button under each logged-out cluster,
+  and a real budget bar.
+- Drag clusters, or press Alt+Up / Alt+Down, to reorder them; the order syncs.
+- "All projects" says how many clusters its projects come from (`123 · 1/2 clusters`)
+  while one is logged out; its hover lists the clusters shown and the ones left out.
+- Dragging jobs, columns or clusters over a place that takes no drop shows the
+  no-drop cursor.
+
 ## [0.1.1] - 2026-10-30
 
 ### Changed

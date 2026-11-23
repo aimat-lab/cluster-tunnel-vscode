@@ -37,7 +37,8 @@
       "ctun": [
         {
           "id": "ctun.clusters",
-          "name": "Clusters"
+          "name": "Clusters",
+          "type": "webview"
         },
         {
           "id": "ctun.projects",
@@ -49,12 +50,6 @@
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "ctun.clusters",
-        "contents": "Your ctun clusters will show here."
-      }
-    ],
     "commands": [
       {
         "command": "ctun.refresh",
@@ -208,16 +203,6 @@
         }
       ],
       "view/item/context": [
-        {
-          "command": "ctun.login",
-          "when": "view == ctun.clusters && viewItem == cluster-down",
-          "group": "inline"
-        },
-        {
-          "command": "ctun.logout",
-          "when": "view == ctun.clusters && viewItem == cluster-live",
-          "group": "inline"
-        },
         {
           "command": "ctun.hideProject",
           "when": "view == ctun.projects && viewItem =~ /^(project|unassigned)-shown$/",

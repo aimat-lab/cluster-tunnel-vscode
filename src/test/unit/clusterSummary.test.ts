@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { test } from "node:test";
-import { summarize, textBar } from "../../clusterSummary";
+import { summarize } from "../../clusterSummary";
 import { GUARDED_STATUS, JOBS, UNGUARDED_STATUS } from "../fixtures/ctunOutput";
 
 test("summarizes a guarded cluster with its budget use and job counts", () => {
@@ -27,9 +27,4 @@ test("reports a budget probe error", () => {
 test("reports a jobs error", () => {
   const summary = summarize(GUARDED_STATUS, { jobs: [], error: "squeue: command not found" });
   assert.strictEqual(summary.jobs, "could not list jobs");
-});
-
-test("draws a ten-segment text bar, clamped to full", () => {
-  assert.strictEqual(textBar(0.3), "▰▰▰▱▱▱▱▱▱▱");
-  assert.strictEqual(textBar(1.7), "▰▰▰▰▰▰▰▰▰▰");
 });

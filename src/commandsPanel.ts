@@ -1,8 +1,8 @@
-import * as crypto from "crypto";
 import * as vscode from "vscode";
 import type { ClusterData } from "./clusterData";
 import { buildTranscript, CommandsTranscriptModel, shellJoin } from "./commandsTranscript";
 import { CommandLog, Ctun, CtunError } from "./ctun";
+import { webviewHtml } from "./webviewHtml";
 
 /** P9: `ctun logs` only reads a local file, so it may run this often. */
 const LOG_REFRESH_MS = 10_000;
@@ -57,7 +57,7 @@ export class CommandsPanel {
     private cluster: string,
   ) {
     panel.iconPath = vscode.Uri.joinPath(mediaRoot, "clusters.svg");
-    panel.webview.html = renderHtml(panel.webview, mediaRoot);
+    panel.webview.html = webviewHtml(panel.webview, mediaRoot, "commands", "Commands");
     this.disposables.push(
       panel.webview.onDidReceiveMessage((message: WebviewMessage) => void this.handle(message)),
       panel.onDidChangeViewState(() => this.followVisibility()),
@@ -179,27 +179,3 @@ function titleOf(cluster: string): string {
   return `Commands · ${cluster}`;
 }
 
-function renderHtml(webview: vscode.Webview, mediaRoot: vscode.Uri): string {
-  const nonce = crypto.randomBytes(16).toString("base64");
-  const script = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "commands.js"));
-  const style = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "commands.css"));
-  const csp = [
-    "default-src 'none'",
-    `style-src ${webview.cspSource}`,
-    `script-src 'nonce-${nonce}'`,
-  ].join("; ");
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${csp}">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="${style}">
-<title>Commands</title>
-</head>
-<body>
-<main id="app" aria-busy="true"></main>
-<script nonce="${nonce}" src="${script}"></script>
-</body>
-</html>`;
-}

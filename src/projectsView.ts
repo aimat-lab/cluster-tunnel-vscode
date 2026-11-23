@@ -69,9 +69,13 @@ export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.Tre
     const item = new vscode.TreeItem("All projects");
     const totals = this.totals();
     const topLevel = [...totals.keys()].filter((project) => parentProject(project) === undefined);
-    item.description = String(topLevel.reduce((sum, project) => sum + (totals.get(project) ?? 0), 0));
-    item.iconPath = new vscode.ThemeIcon("list-flat");
-    item.tooltip = "Show every project";
+    const jobCount = topLevel.reduce((sum, project) => sum + (totals.get(project) ?? 0), 0);
+    const connected = this.data.statuses.filter((status) => status.live).map((status) => status.cluster);
+    const loggedOut = this.data.statuses.filter((status) => !status.live).map((status) => status.cluster);
+    const clusterCount = this.data.statuses.length;
+    item.description =
+      loggedOut.length === 0 ? String(jobCount) : `${jobCount} · ${connected.length}/${clusterCount} clusters`;
+    item.tooltip = sourcesTooltip(connected, loggedOut);
     item.command = { command: "ctun.showAllProjects", title: "Show every project" };
     return item;
   }
@@ -112,7 +116,7 @@ export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.Tre
     }
   }
 
-  /** A project dropped here is renamed into `target`. */
+  /** A project dropped on a row is renamed into `target`; on "All projects" or the empty space below the rows, to the top level. */
   async handleDrop(target: string | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
     const draggedProject = await dataTransfer.get(PROJECT_DRAG_MIME)?.asString();
     if (draggedProject !== undefined) {
@@ -148,4 +152,18 @@ export class ProjectsView implements vscode.TreeDataProvider<string>, vscode.Tre
     }
     return totalsWithNested(jobCounts);
   }
+}
+
+/** The "All projects" hover: which clusters the projects come from, and which are missing because they are logged out. */
+function sourcesTooltip(connected: readonly string[], loggedOut: readonly string[]): vscode.MarkdownString {
+  const section = (heading: string, clusters: readonly string[]) =>
+    clusters.length === 0 ? [] : [`**${heading}**`, "", ...clusters.map((cluster) => `- ${cluster}`), ""];
+  return new vscode.MarkdownString(
+    [
+      "Show every project",
+      "",
+      ...section("Projects from", connected),
+      ...section("Not shown: logged out", loggedOut),
+    ].join("\n"),
+  );
 }

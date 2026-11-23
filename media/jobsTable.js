@@ -345,6 +345,15 @@
     });
   }
 
+  // Over anything that takes no drop the cursor shows "no drop": releasing there does nothing.
+  document.addEventListener("dragover", (event) => {
+    const types = event.dataTransfer?.types ?? [];
+    const isOwnDrag = types.includes(JOBS_DRAG_MIME) || types.includes(COLUMN_DRAG_MIME);
+    if (!isOwnDrag || event.defaultPrevented) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "none";
+  });
+
   /**
    * A selected row drags the whole selection, any other row only itself; shown as a stack of cards under the cursor.
    * While it drags, the table folds into one band per project, so every target is in view.

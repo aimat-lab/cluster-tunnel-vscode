@@ -1,89 +1,87 @@
 import * as vscode from "vscode";
 import type { ClusterData } from "./clusterData";
-import type { ClusterStatus } from "./ctun";
-import { summarize, textBar } from "./clusterSummary";
+import type { ClusterOrder } from "./clusterOrder";
+import { buildClustersModel, ClustersModel } from "./clustersModel";
+import { webviewHtml } from "./webviewHtml";
 
 export const CLUSTERS_VIEW_ID = "ctun.clusters";
 
-/** A cluster entry; inline menu commands receive it as their argument. */
-export interface ClusterNode {
-  kind: "cluster";
-  status: ClusterStatus;
-}
+/** Messages the webview sends; it never gets data any other way than `postMessage`. */
+type WebviewMessage =
+  | { type: "ready" }
+  | { type: "login"; cluster: string }
+  | { type: "logout"; cluster: string }
+  | { type: "showJobs" }
+  | { type: "showCommands"; cluster: string }
+  | { type: "move"; cluster: string; before: string | null };
 
-type Node = ClusterNode | { kind: "detail"; item: vscode.TreeItem };
+/** The Clusters sidebar: one card per configured cluster, with its Log in button, in the order the user dragged them into. */
+export class ClustersView implements vscode.WebviewViewProvider {
+  private view: vscode.WebviewView | undefined;
 
-/** The Clusters sidebar: one expandable entry per configured cluster. */
-export class ClustersView implements vscode.TreeDataProvider<Node> {
-  private readonly changed = new vscode.EventEmitter<void>();
-  readonly onDidChangeTreeData = this.changed.event;
-
-  constructor(private readonly data: ClusterData) {
-    data.onDidChange(() => this.changed.fire());
+  constructor(
+    private readonly extensionUri: vscode.Uri,
+    private readonly data: ClusterData,
+    private readonly order: ClusterOrder,
+  ) {
+    data.onDidChange(() => this.post());
   }
 
-  getTreeItem(node: Node): vscode.TreeItem {
-    return node.kind === "cluster" ? this.clusterItem(node.status) : node.item;
+  resolveWebviewView(view: vscode.WebviewView): void {
+    const mediaRoot = vscode.Uri.joinPath(this.extensionUri, "media");
+    view.webview.options = { enableScripts: true, localResourceRoots: [mediaRoot] };
+    view.webview.html = webviewHtml(view.webview, mediaRoot, "clusters", "Clusters");
+    view.webview.onDidReceiveMessage((message: WebviewMessage) => void this.handle(message));
+    view.onDidChangeVisibility(() => {
+      if (view.visible) {
+        void this.data.refreshIfStale();
+      }
+    });
+    view.onDidDispose(() => (this.view = undefined));
+    this.view = view;
   }
 
-  getChildren(node?: Node): Node[] {
-    if (node === undefined) {
-      return this.data.statuses.map((status) => ({ kind: "cluster", status }));
+  private async handle(message: WebviewMessage): Promise<void> {
+    switch (message.type) {
+      case "ready":
+        this.post();
+        return;
+      case "login":
+        await vscode.commands.executeCommand("ctun.login", message.cluster);
+        return;
+      case "logout":
+        await vscode.commands.executeCommand("ctun.logout", message.cluster);
+        return;
+      case "showJobs":
+        await vscode.commands.executeCommand("ctun.showJobs");
+        return;
+      case "showCommands":
+        await vscode.commands.executeCommand("ctun.showCommands", message.cluster);
+        return;
+      case "move":
+        await this.order.move(this.clusterNames(), message.cluster, message.before ?? undefined);
+        this.post();
+        return;
     }
-    if (node.kind === "detail") {
-      return [];
-    }
-    return this.detailItems(node.status).map((item) => ({ kind: "detail", item }));
   }
 
-  private clusterItem(status: ClusterStatus): vscode.TreeItem {
-    const item = new vscode.TreeItem(status.cluster, vscode.TreeItemCollapsibleState.Expanded);
-    item.id = status.cluster;
-    item.tooltip = status.target;
-    if (this.data.loggingIn.has(status.cluster)) {
-      item.description = "logging in";
-      item.iconPath = new vscode.ThemeIcon("loading~spin");
-      item.contextValue = "cluster-loggingIn";
-    } else if (status.live) {
-      item.description = "connected";
-      item.iconPath = new vscode.ThemeIcon("circle-filled", new vscode.ThemeColor("testing.iconPassed"));
-      item.contextValue = "cluster-live";
-    } else {
-      item.description = "logged out";
-      item.iconPath = new vscode.ThemeIcon("circle-outline");
-      item.contextValue = "cluster-down";
-    }
-    return item;
+  private clusterNames(): string[] {
+    return this.data.statuses.map((status) => status.cluster);
   }
 
-  private detailItems(status: ClusterStatus): vscode.TreeItem[] {
-    if (this.data.loggingIn.has(status.cluster)) {
-      return [plainItem("Waiting for the ctun login window…")];
-    }
-    if (!status.live) {
-      const loginHint = plainItem("No tunnel. Log in to see jobs and budget.");
-      loginHint.command = { command: "ctun.login", title: "Log in", arguments: [status.cluster] };
-      return [loginHint];
-    }
-    const clusterJobs = this.data.jobsOf(status.cluster);
-    const summary = summarize(status, clusterJobs);
-    const budgetBar = summary.budgetFraction === undefined ? "" : `  ${textBar(summary.budgetFraction)}`;
-    const jobs = detailItem("Jobs", summary.jobs);
-    jobs.tooltip = clusterJobs?.error ?? undefined;
-    jobs.command = { command: "ctun.showJobs", title: "Show cluster jobs" };
-    const commands = detailItem("Commands", summary.commands);
-    commands.command = { command: "ctun.showCommands", title: "Show the commands", arguments: [status.cluster] };
-    return [detailItem("Session", summary.session), detailItem("Budget", summary.budget + budgetBar), commands, jobs];
+  private model(): ClustersModel {
+    const { data } = this;
+    const byName = new Map(data.statuses.map((status) => [status.cluster, status]));
+    return buildClustersModel({
+      statuses: this.order.sorted(this.clusterNames()).map((cluster) => byName.get(cluster)!),
+      loggingIn: data.loggingIn,
+      jobsOf: (cluster) => data.jobsOf(cluster),
+      loaded: data.updatedAt !== undefined || data.error !== undefined,
+      error: data.error ? `ctun failed: ${data.error.message}` : undefined,
+    });
   }
-}
 
-function detailItem(label: string, description: string): vscode.TreeItem {
-  const item = new vscode.TreeItem(label);
-  item.description = description;
-  item.tooltip = description;
-  return item;
-}
-
-function plainItem(label: string): vscode.TreeItem {
-  return new vscode.TreeItem(label);
+  private post(): void {
+    void this.view?.webview.postMessage({ type: "model", model: this.model() });
+  }
 }

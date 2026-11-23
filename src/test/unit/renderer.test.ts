@@ -148,6 +148,15 @@ test("a selected row drags the selection, another row only itself, and a project
   assert.deepStrictEqual(sent.at(-1), { type: "dropOnProject", keys: ["haicore/101", "haicore/102"], project: "legacy" });
 });
 
+test("a job drag over anything but a project band shows the no-drop cursor", () => {
+  const { app } = render(model());
+  const window = app.ownerDocument.defaultView!;
+  const dataTransfer = { types: ["application/vnd.ctun.jobs"], dropEffect: "move" };
+  const dragover = Object.assign(new window.Event("dragover", { bubbles: true, cancelable: true }), { dataTransfer });
+  app.querySelector(".job")!.dispatchEvent(dragover);
+  assert.deepStrictEqual([dragover.defaultPrevented, dataTransfer.dropEffect], [true, "none"]);
+});
+
 test("a drag folds the table into one band per known project and unfolds it after", async () => {
   const { app, post } = render(model());
   const window = app.ownerDocument.defaultView!;

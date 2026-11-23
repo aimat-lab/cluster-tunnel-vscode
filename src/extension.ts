@@ -2,7 +2,8 @@ import * as vscode from "vscode";
 import { AddOnRegistry } from "./addOnRegistry";
 import { registerWandbAddOn } from "./addons/wandb";
 import { ClusterData } from "./clusterData";
-import { CLUSTERS_VIEW_ID, ClusterNode, ClustersView } from "./clustersView";
+import { CLUSTER_ORDER_STATE_KEY, ClusterOrder } from "./clusterOrder";
+import { CLUSTERS_VIEW_ID, ClustersView } from "./clustersView";
 import { loadChanges } from "./codeChanges";
 import { ColumnLayoutStore } from "./columnLayout";
 import { CommandsPanel, CommandsPanelServices } from "./commandsPanel";
@@ -25,11 +26,15 @@ export function activate(context: vscode.ExtensionContext): void {
   const addOns = new AddOnRegistry();
   const hiddenProjects = new HiddenProjects(context.globalState);
   const draftProjects = new DraftProjects(context.globalState);
-  // Hidden and draft projects live in globalState, which Settings Sync carries to the user's other machines.
-  context.globalState.setKeysForSync([HIDDEN_PROJECTS_STATE_KEY, DRAFT_PROJECTS_STATE_KEY]);
+  const clusterOrder = new ClusterOrder(context.globalState);
+  // These live in globalState, which Settings Sync carries to the user's other machines.
+  context.globalState.setKeysForSync([HIDDEN_PROJECTS_STATE_KEY, DRAFT_PROJECTS_STATE_KEY, CLUSTER_ORDER_STATE_KEY]);
   const pendingCount = () => pendingReviews(data.jobs).length;
 
-  const clustersView = vscode.window.createTreeView(CLUSTERS_VIEW_ID, { treeDataProvider: new ClustersView(data) });
+  const clustersView = vscode.window.registerWebviewViewProvider(
+    CLUSTERS_VIEW_ID,
+    new ClustersView(context.extensionUri, data, clusterOrder),
+  );
   const renameServices: ProjectRenameServices = {
     data,
     draftProjects,
@@ -50,14 +55,6 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   const setup = new SetupView(data, addOns, createCtun);
   const setupView = vscode.window.createTreeView(SETUP_VIEW_ID, { treeDataProvider: setup });
-  data.onDidChange(() => {
-    clustersView.message = data.error ? `ctun failed: ${data.error.message}` : undefined;
-  });
-  clustersView.onDidChangeVisibility(({ visible }) => {
-    if (visible) {
-      void data.refreshIfStale();
-    }
-  });
 
   const services: JobsPanelServices = {
     data,
@@ -126,12 +123,8 @@ export function activate(context: vscode.ExtensionContext): void {
       await hiddenProjects.showOnly(project, projectTree.knownProjects());
       showJobs();
     }),
-    vscode.commands.registerCommand("ctun.login", (cluster: string | ClusterNode) =>
-      logIn(createCtun(), data, clusterName(cluster), loginMethod()),
-    ),
-    vscode.commands.registerCommand("ctun.logout", (cluster: string | ClusterNode) =>
-      logOut(createCtun(), data, clusterName(cluster)),
-    ),
+    vscode.commands.registerCommand("ctun.login", (cluster: string) => logIn(createCtun(), data, cluster, loginMethod())),
+    vscode.commands.registerCommand("ctun.logout", (cluster: string) => logOut(createCtun(), data, cluster)),
   );
   registerWandbAddOn(context, addOns);
   void announceLoginBridge(context, (request) => {
@@ -209,11 +202,6 @@ async function pickLiveCluster(data: ClusterData): Promise<string | undefined> {
     return live[0];
   }
   return vscode.window.showQuickPick(live, { title: "Show the commands sent to which cluster?" });
-}
-
-/** The tree's login hint passes a name; its inline buttons pass the node. */
-function clusterName(cluster: string | ClusterNode): string {
-  return typeof cluster === "string" ? cluster : cluster.status.cluster;
 }
 
 async function openConfig(ctun: Ctun): Promise<void> {

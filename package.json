@@ -2,7 +2,7 @@
   "name": "cluster-tunnel",
   "displayName": "Cluster Tunnel",
   "description": "Shows your HPC clusters and Slurm jobs through the ctun CLI.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "AiMatGroup",
   "license": "MIT",
   "icon": "media/icon.png",
